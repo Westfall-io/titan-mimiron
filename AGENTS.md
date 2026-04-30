@@ -6,6 +6,7 @@ Operating rules for AI coding agents working in this repository.
 
 You only have scope within the current directory. If a change appears to
 require touching something outside this folder (e.g. a new env var on the
+API service, a compose file edit, an image retag), **do not make the
 change yourself**. Surface the request to the user explicitly in the
 chat.
 
@@ -35,18 +36,18 @@ Common picks for this project:
 | Bug fix                                  | 🐛 bug                 |
 | Documentation only                       | 📝 memo                |
 | Performance                              | ⚡️ zap                 |
-| Refactor (no behavior change)            | ♻️  recycle             |
+| Refactor (no behavior change)            | ♻️ recycle             |
 | Tests                                    | ✅ check-mark          |
 | Build / Docker / deploy plumbing         | 📦 package             |
 | Dev tooling / scripts                    | 🔧 wrench              |
 | CI                                       | 👷 construction-worker |
-| Dependencies (add / upgrade)             | ⬆️  arrow-up            |
+| Dependencies (add / upgrade)             | ⬆️ arrow-up            |
 | Security                                 | 🔒 lock                |
 | Initial scaffolding / first commit       | 🎉 tada                |
 
 When a commit genuinely spans two categories, pick the more prominent
 one rather than stacking emojis. If you can't find a clean fit, prefer
-✨ for additive changes and ♻️  for restructures over inventing a new
+✨ for additive changes and ♻️ for restructures over inventing a new
 emoji.
 
 **Do not add a `Co-Authored-By: Claude …` (or any other agent) trailer
