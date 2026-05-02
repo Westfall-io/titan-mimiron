@@ -93,6 +93,7 @@ Per the API team's recommendation, narrowed by the read-only-by-design decision 
 - **Renderer:** [Mermaid](https://mermaid.js.org/) 11 with `graph LR`, custom `theme: 'base'` themed to match the app's dark palette, `curve: 'basis'`, `securityLevel: 'loose'` to enable the `click ID call fn(arg)` callback syntax. Software names are slug-validated server-side (`^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$`) so the loose label policy is safe by construction.
 - **Click semantics:** click a node → `/software/:name`; click an edge or its version label → `/contracts/:id`. The detail pane updates; the graph stays visible. Click handlers are wired post-render against the SVG (we don't use Mermaid's `click ID call fn()` DSL — too brittle across versions, and Mermaid has no edge-click DSL anyway). Contracts are matched to edges by source-order index, which is stable across Mermaid 11 flowchart renders.
 - **Selection highlight:** when the route is `/software/:name`, the matching graph node gets an accent stroke + glow. When the route is `/contracts/:id`, both endpoints (owner and counterparty) are highlighted. Re-rendering the SVG on every route change would be wasteful; instead we toggle a CSS class on the existing `<g class="node">` elements.
+- **Search dimming:** when the header search input is non-empty, non-matching nodes drop to ~20% opacity and edges where neither endpoint matches drop to ~15%. Match rule mirrors the catalog's server-side `?match=` (case-insensitive substring on `name` + `aliases`). Selection always wins over dimming.
 - **Legend:** thin strip at the bottom of the pane with node count, edge count, and a "click a node to inspect" hint.
 
 ---
@@ -152,7 +153,6 @@ Per the read-only-by-design decision above:
 | Sidebar grouped by Part type | API has only `software` and `contracts` — no Part subtyping |
 | Git history panel | No `/history` endpoint; MVP has `version` + `updated_at` only |
 | File-path browsing | API addresses content by `name` (software) or `id` (contracts), not paths |
-| Search dimming the graph | Catalog search and graph view are separate routes today; cross-coupling is a v0.3.0 concern |
 
 ---
 

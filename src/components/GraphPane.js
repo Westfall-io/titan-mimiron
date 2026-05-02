@@ -2,7 +2,7 @@ import { ref, computed, watch, onMounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import mermaid from 'mermaid';
 import * as api from '../api.js';
-import { retryNonce } from '../store.js';
+import { retryNonce, search } from '../store.js';
 
 // Mermaid IDs must be alphanumeric/underscore. Software names are slug-shaped
 // — replace hyphens with underscores and prefix to guarantee an alpha leading char.
@@ -30,6 +30,13 @@ export default {
     const counts = ref({ software: 0, contracts: 0 });
     const containerRef = ref(null);
     let nodeMap = {};
+    // Software + contracts + edge-element refs survive past render() so the
+    // search-dimming watcher can recompute against fresh data without a
+    // graph re-render.
+    let softwareList = [];
+    let contractList = [];
+    let edgePathEls = [];
+    let edgeLabelEls = [];
 
     // For contract routes we need owner+counterparty; fetch the contract
     // to learn them, then highlight both endpoints.
@@ -65,6 +72,36 @@ export default {
     }
     watch(selected, applySelection);
 
+    // Search-dimming: nodes whose name/aliases don't substring-match the
+    // current search drop to low opacity; edges where neither endpoint
+    // matches dim too. Mirrors the catalog's `?match=` rule (substring,
+    // case-insensitive, name + aliases).
+    function applyDimming() {
+      const q = (search.value || '').trim().toLowerCase();
+      if (!q) {
+        for (const el of Object.values(nodeMap)) el.classList.remove('node-dim');
+        for (const el of edgePathEls) el?.classList.remove('edge-dim');
+        for (const el of edgeLabelEls) el?.classList.remove('edge-dim');
+        return;
+      }
+      const matchingSlugs = new Set();
+      for (const sw of softwareList) {
+        const hay = [sw.name, ...(sw.aliases || [])].map((s) => s.toLowerCase());
+        if (hay.some((h) => h.includes(q))) matchingSlugs.add(slug(sw.name));
+      }
+      for (const [s, el] of Object.entries(nodeMap)) {
+        el.classList.toggle('node-dim', !matchingSlugs.has(s));
+      }
+      contractList.forEach((c, i) => {
+        const dim =
+          !matchingSlugs.has(slug(c.owner)) &&
+          !matchingSlugs.has(slug(c.counterparty));
+        edgePathEls[i]?.classList.toggle('edge-dim', dim);
+        edgeLabelEls[i]?.classList.toggle('edge-dim', dim);
+      });
+    }
+    watch(search, applyDimming);
+
     // Wire post-render click handlers for nodes and edges. We don't use
     // Mermaid's `click ID call fn()` DSL because it relies on a global window
     // function and is fragile across Mermaid versions; direct DOM listeners
@@ -92,17 +129,17 @@ export default {
       // (or `.edgePath`) and as <g class="edgeLabel">. We iterate by source-order index
       // and bind both to the corresponding contract id. The label is the friendlier
       // click target; the path is a thin hit area but useful as a fallback.
-      const edgePaths = root.querySelectorAll('.edgePaths .edgePath, g.edgePath');
-      const edgeLabels = root.querySelectorAll('.edgeLabels .edgeLabel, g.edgeLabel');
+      edgePathEls = Array.from(root.querySelectorAll('.edgePaths .edgePath, g.edgePath'));
+      edgeLabelEls = Array.from(root.querySelectorAll('.edgeLabels .edgeLabel, g.edgeLabel'));
       contracts.forEach((c, i) => {
         const handler = () =>
           router.push(`/contracts/${encodeURIComponent(c.contract_id)}`);
-        const ep = edgePaths[i];
+        const ep = edgePathEls[i];
         if (ep) {
           ep.classList.add('edge-clickable');
           ep.addEventListener('click', handler);
         }
-        const el = edgeLabels[i];
+        const el = edgeLabelEls[i];
         if (el) {
           el.classList.add('edge-label-clickable');
           el.addEventListener('click', handler);
@@ -156,8 +193,11 @@ export default {
         const { svg } = await mermaid.render('mimiron-graph', source);
         containerRef.value.innerHTML = svg;
 
+        softwareList = software;
+        contractList = contracts;
         wireClicks(software, contracts);
         applySelection();
+        applyDimming();
 
         status.value = 'ready';
       } catch (e) {

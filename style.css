@@ -638,6 +638,16 @@ body { display: flex; flex-direction: column; }
   color: var(--text) !important;
 }
 
+/* Search-driven dimming. Non-matching nodes/edges drop to low opacity so the
+   matches stand out. Selected nodes always stay full opacity (dim is purely
+   a search filter; selection wins). */
+.graph-container .node.node-dim { opacity: 0.2; transition: opacity 120ms; }
+.graph-container .node.node-selected { opacity: 1 !important; }
+.graph-container .edgePath.edge-dim,
+.graph-container .edgeLabel.edge-dim,
+.graph-container g.edgePath.edge-dim,
+.graph-container g.edgeLabel.edge-dim { opacity: 0.15; transition: opacity 120ms; }
+
 /* Edges — clickable post-render. Path hit areas are thin; label is the
    easier target. Both are wired to navigate to /contracts/:id. */
 .graph-container .edge-clickable { cursor: pointer; }
