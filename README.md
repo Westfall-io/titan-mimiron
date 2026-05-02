@@ -75,6 +75,8 @@ This resolves [#2](https://github.com/Westfall-io/titan-mimiron/issues/2) — ru
 
 Routing is hash-based: `#/`, `#/software/:name`, `#/contracts/:id`. Only the detail pane swaps on route change — the catalog and graph stay mounted. The graph highlights the route's selection (one node for software, both endpoints for a contract). In the graph: click a node to open the software, click an edge or its version label to open the contract. The header search dims non-matching graph nodes (and edges between non-matches) while the catalog filters server-side; both react to the same input. Search debounces 300ms.
 
+Markdown links inside contract/software bodies are intercepted: a slug-shaped href (`titan-tyr`) routes to `/software/titan-tyr`, a UUID routes to `/contracts/<uuid>`, external (`http://…`) opens in a new tab with a ↗ glyph, anything else is marked broken. See [DESIGN-MVP.md → Markdown rendering](./DESIGN-MVP.md#markdown-rendering).
+
 ## Tech stack
 
 | Concern | Choice |

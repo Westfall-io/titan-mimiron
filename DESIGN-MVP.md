@@ -130,6 +130,18 @@ Read the token from app config, not baked in — when real per-caller auth lands
 
 marked.js. Strip the `<!-- template: ...@X.Y.Z -->` stamp from visible output (per detail screen above).
 
+**In-app link interception (added 0.3.3).** Markdown link hrefs are rewritten at parse time so cross-references navigate inside the app:
+
+| Href shape | Rewritten to | Behavior |
+|---|---|---|
+| `#…` | unchanged | passthrough (in-page anchor or pre-formed hash route) |
+| `scheme:…` or `//host…` | unchanged | external; `target="_blank" rel="noopener noreferrer"`, ↗ glyph |
+| `<uuid>` | `#/contracts/<uuid>` | in-app navigation to contract detail |
+| slug-shaped (matches `^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$`) | `#/software/<slug>` | in-app navigation to software detail |
+| anything else (relative paths like `./foo.md`, etc.) | unchanged | marked `.md-link-broken` (red strike-through, hover title "broken in-app reference") |
+
+Encourages contract authors to write `[titan-tyr](titan-tyr)` for software refs and `[the storage contract](abc-123-…)` for contract refs. Both work as plain markdown elsewhere (renders as a relative link), and resolve as in-app navigation here.
+
 ---
 
 ## Out of scope (permanent)

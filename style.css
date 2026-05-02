@@ -560,6 +560,23 @@ body { display: flex; flex-direction: column; }
 
 .markdown-body a:hover { text-decoration: underline; }
 
+/* External links get a small ↗ glyph so it's obvious they leave the app. */
+.markdown-body a[target="_blank"]::after {
+  content: ' ↗';
+  font-size: 0.85em;
+  color: var(--text3);
+}
+
+/* Links whose href didn't match any in-app pattern (no scheme, not a
+   UUID, not a slug) — usually a relative path that won't resolve. */
+.markdown-body a.md-link-broken {
+  color: var(--coral);
+  text-decoration: line-through dotted;
+  text-decoration-color: var(--coral);
+  cursor: help;
+}
+.markdown-body a.md-link-broken:hover { text-decoration: line-through dotted; }
+
 /* ───── Graph pane ───── */
 
 .graph-stage {
