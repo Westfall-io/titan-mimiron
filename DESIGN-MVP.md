@@ -39,23 +39,26 @@ Delivery mechanism still undecided (see [titan-norgannon#8](https://github.com/W
 
 ## Layout
 
-Three regions, no graph:
+Three panes, graph is permanent furniture (not a route — see 0.3.0):
 
 ```
-┌──────────────────────────────────────────────────────────┐
-│  HEADER — wordmark, search box, health indicator         │
-├──────────────────────────┬───────────────────────────────┤
-│                          │                               │
-│   CATALOG LIST           │   DETAIL                      │
-│                          │                               │
-│   paginated software     │   software name, version,     │
-│   rows; alias chips;     │   links, rendered markdown,   │
-│   "Load more" button     │   related contracts list      │
-│                          │                               │
-└──────────────────────────┴───────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│  HEADER — wordmark, search box, health indicator                     │
+├──────────────┬──────────────────────────────────┬────────────────────┤
+│              │                                  │                    │
+│  CATALOG     │   GRAPH (always mounted)         │   DETAIL           │
+│              │                                  │                    │
+│  paginated   │   all software as nodes,         │   markdown body    │
+│  software    │   contracts as directed edges;   │   for the route's  │
+│  rows;       │   click node → /software/:name;  │   software or      │
+│  alias       │   route highlights selected      │   contract;        │
+│  chips;      │   node(s); legend strip with     │   topbar chips +   │
+│  "Load more" │   counts at the bottom           │   related list     │
+│              │                                  │                    │
+└──────────────┴──────────────────────────────────┴────────────────────┘
 ```
 
-Master-detail two-pane is the simplest MVP. A separate route per detail page is also acceptable.
+The graph is the centerpiece — the catalog and the detail are the two sidebars. All three panes stay visible across `/`, `/software/:name`, and `/contracts/:id`; only the detail pane swaps content.
 
 ---
 
@@ -83,12 +86,14 @@ Per the API team's recommendation, narrowed by the read-only-by-design decision 
 - **Related contracts:** `GET /software/{name}/contracts?limit=50` — every contract where this software is owner or counterparty. Each row: `contract_id`, `owner`, `counterparty`, `version`, `updated_at`. **No `markdown` in the list — fetch per-row on click.**
 - Click a contract → `GET /contracts/{contract_id}`.
 
-### 3. Graph (added in 0.2.0)
+### 3. Graph (added in 0.2.0; promoted to permanent center pane in 0.3.0)
 
-- **Route:** `#/graph`. Renders all software as nodes, all contracts as directed edges. Single view; the original DESIGN.md four-view tab system (Full / Software / DevOps / Interfaces) stays deferred until the API exposes Part subtyping and environments.
-- **Data:** walks `GET /software` and `GET /contracts` to completion (cursor pagination, `limit=100`, opaque `next`). One paginated request bag per resource — fine at current catalog sizes; revisit if the catalog grows past a few hundred entries.
-- **Renderer:** [Mermaid](https://mermaid.js.org/) 11 with `graph LR`, dark theme, `securityLevel: 'loose'` to enable the `click ID call fn(arg)` callback syntax. Software names are slug-validated server-side (`^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$`) so the loose label policy is safe by construction.
-- **Click semantics:** click a node → `/software/:name` (back to detail view). Edge clicks not supported in this version — the version label on the edge is enough to tell users which contract is which; navigate to either endpoint to find it in the contracts list.
+- **Placement:** always-mounted center pane in the 3-pane layout (no `/graph` route — that was 0.2.0; in 0.3.0 the graph is permanent furniture). The catalog and detail panes flank it.
+- **Data:** walks `GET /software` and `GET /contracts` to completion (cursor pagination, `limit=100`, opaque `next`). One paginated request bag per resource — fine at current catalog sizes; revisit if the catalog grows past a few hundred entries. Fetched once on mount; the pane survives route changes.
+- **Renderer:** [Mermaid](https://mermaid.js.org/) 11 with `graph LR`, custom `theme: 'base'` themed to match the app's dark palette, `curve: 'basis'`, `securityLevel: 'loose'` to enable the `click ID call fn(arg)` callback syntax. Software names are slug-validated server-side (`^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$`) so the loose label policy is safe by construction.
+- **Click semantics:** click a node → `/software/:name`. The detail pane updates; the graph stays visible. Edge clicks not supported in this version — the version label on the edge is enough to tell users which contract is which; navigate to either endpoint to find it in the contracts list.
+- **Selection highlight:** when the route is `/software/:name`, the matching graph node gets an accent stroke + glow. When the route is `/contracts/:id`, both endpoints (owner and counterparty) are highlighted. Re-rendering the SVG on every route change would be wasteful; instead we toggle a CSS class on the existing `<g class="node">` elements.
+- **Legend:** thin strip at the bottom of the pane with node count, edge count, and a "click a node to inspect" hint.
 
 ---
 

@@ -2,7 +2,7 @@
 
 The WatcherVault Web UI — a **read-only** browser into the WatcherVault catalog of software and contracts. titan-mimiron is intentionally read-only by design (see [DESIGN-MVP.md](./DESIGN-MVP.md) → "Scope: read-only, by design"); software registration and contract proposals happen via the API directly or via the `register-software` Claude skill in this repo.
 
-> **Status:** 0.2.0 — adds the Mermaid graph view. Four routes: catalog (list + search + pagination), software detail (markdown + related contracts), contract detail, and graph (all software as nodes, all contracts as edges). Polled health dot in the header. The four-view graph design (Software / DevOps / Interfaces tabs with part subtyping and environment switcher) from [DESIGN.md](./DESIGN.md) stays deferred — it's gated on titan-tyr exposing those concepts.
+> **Status:** 0.3.0 — promotes the Mermaid graph from a separate route to the always-mounted center pane in a 3-pane layout (catalog · graph · detail). Selecting a software or contract highlights the matching node(s) in the graph; the detail pane swaps in markdown for the selected entity. Three routes: home (empty detail), software detail (markdown + related contracts), contract detail. Polled health dot in the header. The four-view graph design (Software / DevOps / Interfaces tabs with part subtyping and environment switcher) from [DESIGN.md](./DESIGN.md) stays deferred — it's gated on titan-tyr exposing those concepts.
 
 ---
 
@@ -65,15 +65,15 @@ This resolves [#2](https://github.com/Westfall-io/titan-mimiron/issues/2) — ru
 
 ## What's in this build
 
-| Screen | Endpoints used |
+| Pane / element | Endpoints used |
 |---|---|
-| Catalog (home) | `GET /software?limit=&after=&match=` |
-| Software detail | `GET /software/{name}` + `GET /software/{name}/contracts` |
-| Contract detail | `GET /contracts/{contract_id}` |
-| Graph (`#/graph`) | `GET /software` + `GET /contracts` (paginated to completion) |
+| Catalog (left) | `GET /software?limit=&after=&match=` |
+| Graph (center, always mounted) | `GET /software` + `GET /contracts` (paginated to completion, fetched once on app mount) |
+| Detail (right) — software | `GET /software/{name}` + `GET /software/{name}/contracts` |
+| Detail (right) — contract | `GET /contracts/{contract_id}` |
 | Header health dot | `GET /health` (polled every 30s) |
 
-Routing is hash-based: `#/`, `#/graph`, `#/software/:name`, `#/contracts/:id`. Search debounces 300ms.
+Routing is hash-based: `#/`, `#/software/:name`, `#/contracts/:id`. Only the detail pane swaps on route change — the catalog and graph stay mounted. The graph highlights the route's selection (one node for software, both endpoints for a contract). Search debounces 300ms.
 
 ## Tech stack
 
@@ -128,12 +128,12 @@ titan-mimiron/
     ├── util.js              Small shared helpers (esc, relativeTime, repoLink)
     ├── components/
     │   ├── HeaderBar.js     Wordmark + search + health dot
-    │   └── CatalogPane.js   Paginated, debounced-search list
-    └── views/
+    │   ├── CatalogPane.js   Paginated, debounced-search list (left pane)
+    │   └── GraphPane.js     Always-mounted Mermaid graph (center pane) + legend strip
+    └── views/               Detail-pane views, swapped by router-view
         ├── EmptyDetail.js
         ├── SoftwareDetail.js
-        ├── ContractDetail.js
-        └── GraphView.js
+        └── ContractDetail.js
 ```
 
 ## Deferred (not in this build)

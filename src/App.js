@@ -1,9 +1,10 @@
 import HeaderBar from './components/HeaderBar.js';
 import CatalogPane from './components/CatalogPane.js';
+import GraphPane from './components/GraphPane.js';
 import { fatal, retry } from './store.js';
 
 export default {
-  components: { HeaderBar, CatalogPane },
+  components: { HeaderBar, CatalogPane, GraphPane },
   setup() {
     return { fatal, retry };
   },
@@ -11,6 +12,7 @@ export default {
     <header-bar />
     <main id="app-main">
       <catalog-pane />
+      <graph-pane />
       <section class="pane detail-pane" aria-label="detail">
         <router-view />
       </section>
