@@ -1,0 +1,8 @@
+.git
+.github
+.gitignore
+.scratch
+.claude
+_model
+*.md
+dev-server.py

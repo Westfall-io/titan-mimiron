@@ -1,14 +1,27 @@
 # titan-mimiron
 
-The WatcherVault Web UI — a navigable, force-directed graph of the WatcherVault software architecture with side-by-side markdown rendering of the underlying contract for any selected element.
+The WatcherVault Web UI — a **read-only** browser into the WatcherVault catalog of software and contracts. titan-mimiron is intentionally read-only by design (see [DESIGN-MVP.md](./DESIGN-MVP.md) → "Scope: read-only, by design"); software registration and contract proposals happen via the API directly or via the `register-software` Claude skill in this repo.
 
-> **Status:** MVP scaffolding shipped. The current build implements the read-only catalog described in [DESIGN-MVP.md](./DESIGN-MVP.md): software list with search, software detail with related contracts, and contract detail. The longer-term direction (graph + environments + register form) is captured in [DESIGN.md](./DESIGN.md).
+> **Status:** MVP shipped and dockerised. Three screens — software catalog (list + search + pagination), software detail (markdown + related contracts), contract detail — plus a polled health dot. The longer-term direction (graph + environments + file-path browsing) is captured in [DESIGN.md](./DESIGN.md).
 
 ---
 
 ## Run it locally
 
-Requires Python 3.9+ and a running titan-tyr (`http://localhost:18000` by default).
+Two ways:
+
+### Docker (production analog)
+
+```sh
+docker build -t titan-mimiron .
+docker run --rm -p 8765:80 \
+  -e TYR_UPSTREAM=http://host.docker.internal:18000 \
+  titan-mimiron
+```
+
+Then open <http://localhost:8765/>. The image is `nginx:1.27-alpine` serving the static SPA and proxying `/tyr/*` to `$TYR_UPSTREAM`. `host.docker.internal` is the right value when titan-tyr runs on your host (Docker Desktop, or Linux with `--add-host=host.docker.internal:host-gateway`); set `TYR_UPSTREAM` to anything titan-tyr is reachable at otherwise.
+
+### Python dev server (faster iteration)
 
 ```sh
 python3 dev-server.py
@@ -16,13 +29,13 @@ python3 dev-server.py
 
 Then open <http://localhost:8765/>.
 
-`dev-server.py` is a tiny static server that also proxies `/tyr/*` to titan-tyr. The proxy is a workaround for [titan-tyr#14](https://github.com/Westfall-io/titan-tyr/issues/14) (no CORS support yet) — once that lands, the static files can be served by anything (`python3 -m http.server`, nginx, an S3 bucket) and `config.json`'s `tyrBaseUrl` can point directly at the API.
-
-To point at a different titan-tyr:
+`dev-server.py` is a tiny static server that also proxies `/tyr/*` to titan-tyr. Same shape as the Docker image, just no rebuild on file changes. Override the upstream and port:
 
 ```sh
 python3 dev-server.py --tyr http://staging-tyr.example:18000 --port 9000
 ```
+
+Both paths exist because titan-tyr v0.7.0 doesn't serve CORS — see [titan-tyr#14](https://github.com/Westfall-io/titan-tyr/issues/14). Once CORS lands, the proxy is optional; `config.json`'s `tyrBaseUrl` can point directly at the API and any static host works.
 
 ## Configuration
 
@@ -85,9 +98,12 @@ titan-mimiron/
 ├── DESIGN.md         Long-term direction (graph, environments, file-path browsing)
 ├── DESIGN-MVP.md     Reconciled brief — source of truth for the MVP build
 ├── README.md         This file
+├── Dockerfile        nginx:alpine + static + /tyr proxy
+├── .dockerignore
+├── nginx/            envsubst-processed nginx config template
 ├── _model/           ICD knowledge-base structure notes
 ├── config.json       Runtime config (tyrBaseUrl, tyrToken)
-├── dev-server.py     Static + proxy dev server (CORS workaround)
+├── dev-server.py     Static + proxy dev server (mirrors the Dockerfile)
 ├── index.html        App shell
 ├── style.css         Design tokens, layout, markdown styling
 └── src/

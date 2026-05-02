@@ -59,9 +59,13 @@ Master-detail two-pane is the simplest MVP. A separate route per detail page is 
 
 ---
 
-## MVP scope (three screens)
+## Scope: read-only, by design
 
-Per the API team's recommendation:
+titan-mimiron is **read-only** — it browses the catalog and renders contracts, nothing more. There is no Register form, no Edit form, no proposal/accept UI, and none are planned. Software registration happens out-of-band (the `register-software` Claude skill ships in this repo for that path); contract proposals happen via direct API calls. This is not a deferral — it is a permanent scope decision. New write-side proposals should be redirected to "use the CLI / skill instead."
+
+## MVP scope (two screens)
+
+Per the API team's recommendation, narrowed by the read-only-by-design decision above:
 
 ### 1. Catalog (home)
 
@@ -78,20 +82,6 @@ Per the API team's recommendation:
   - Issue tracker resolves to `<repo_uri>/issues` if `issue_tracker_uri` is `null`.
 - **Related contracts:** `GET /software/{name}/contracts?limit=50` — every contract where this software is owner or counterparty. Each row: `contract_id`, `owner`, `counterparty`, `version`, `updated_at`. **No `markdown` in the list — fetch per-row on click.**
 - Click a contract → `GET /contracts/{contract_id}`.
-
-### 3. Register software
-
-Sequence:
-
-1. `GET /templates/software` (returns `text/markdown`) — the scaffold.
-2. `GET /templates/software/proposals` to discover `active_version` (the body endpoint doesn't carry it).
-3. Two-pane editor: rendered template (left, reference) + editable filled body (right). Form fields above the editor for `name`, `repo_uri`, `issue_tracker_uri` (optional), `aliases` (chip input), `version` (default `1.0.0`).
-4. Apply the fill conventions (per the `register-software` skill in this repo): replace `<...>` placeholders, substitute `<template-version>` with the active version, strip blockquotes prefixed `**DELETE WHEN FILLING IN.**`, drop pure-reference H3 subsections, don't invent new H2 sections.
-5. Preview the full body. Confirm. `POST /software`.
-
-Common errors:
-- `409` — name taken. Re-prompt.
-- `422` — name not slug-shaped (`^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$`), bad `version`, bad `issue_tracker_uri` (https-only), or alias entry violates per-entry rules. Highlight the offending field and surface `detail` verbatim.
 
 ---
 
@@ -129,7 +119,19 @@ marked.js. Strip the `<!-- template: ...@X.Y.Z -->` stamp from visible output (p
 
 ---
 
-## What's deferred from DESIGN.md
+## Out of scope (permanent)
+
+Per the read-only-by-design decision above:
+
+| Feature | Where it happens instead |
+|---|---|
+| Software registration UI | `register-software` Claude skill in this repo (`POST /software`) |
+| Software edit UI | direct API (`PUT /software/{name}`) |
+| Contract registration UI | direct API (`POST /contracts`) |
+| Contract proposal / accept UI | direct API (`POST /contracts/{id}/proposals`, `…/accept`) |
+| Template management UI | direct API; governance, not user-facing |
+
+## Deferred from DESIGN.md (gated on titan-tyr capability)
 
 | Feature | Why deferred |
 |---|---|
@@ -139,9 +141,6 @@ marked.js. Strip the `<!-- template: ...@X.Y.Z -->` stamp from visible output (p
 | Git history panel | No `/history` endpoint; MVP has `version` + `updated_at` only |
 | File-path browsing | API addresses content by `name` (software) or `id` (contracts), not paths |
 | Search affecting graph dimming | No graph in MVP |
-| Contract registration UI | API team recommends deferring; CLI suffices for now |
-| Proposal/accept flows | Low frequency; deferrable to CLI for v1 |
-| Template management UI | Governance, not user-facing |
 
 ---
 
