@@ -13,13 +13,26 @@ Two ways:
 ### Docker (production analog)
 
 ```sh
-docker build -t titan-mimiron .
-docker run --rm -p 8765:80 \
-  -e TYR_UPSTREAM=http://host.docker.internal:18000 \
-  titan-mimiron
+./build.sh                      # tags titan-mimiron:$(cat VERSION) + :latest
+docker run --rm -p 8765:80 titan-mimiron:latest
 ```
 
-Then open <http://localhost:8765/>. The image is `nginx:1.27-alpine` serving the static SPA and proxying `/tyr/*` to `$TYR_UPSTREAM`. `host.docker.internal` is the right value when titan-tyr runs on your host (Docker Desktop, or Linux with `--add-host=host.docker.internal:host-gateway`); set `TYR_UPSTREAM` to anything titan-tyr is reachable at otherwise.
+Then open <http://localhost:8765/>. The image is `nginx:1.27-alpine` serving the static SPA and proxying `/tyr/*` to `$TYR_UPSTREAM`.
+
+**Container env vars** (both have defaults; override per deployment):
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `TYR_UPSTREAM` | `http://localhost:8000` | Upstream titan-tyr URL — what nginx proxies `/tyr/*` to. |
+| `TYR_TOKEN` | `sysmlv2` | Bearer token written into `config.json` at container start; the SPA puts it on every authed request. |
+
+The default `localhost:8000` resolves *inside* the container — useful when mimiron and titan-tyr share a network (compose stack, `--network=host` on Linux). When titan-tyr runs on your host laptop and mimiron in Docker Desktop, point at the host gateway instead:
+
+```sh
+docker run --rm -p 8765:80 \
+  -e TYR_UPSTREAM=http://host.docker.internal:18000 \
+  titan-mimiron:latest
+```
 
 ### Python dev server (faster iteration)
 
@@ -27,33 +40,28 @@ Then open <http://localhost:8765/>. The image is `nginx:1.27-alpine` serving the
 python3 dev-server.py
 ```
 
-Then open <http://localhost:8765/>.
-
-`dev-server.py` is a tiny static server that also proxies `/tyr/*` to titan-tyr. Same shape as the Docker image, just no rebuild on file changes. Override the upstream and port:
+Then open <http://localhost:8765/>. Same `TYR_UPSTREAM` / `TYR_TOKEN` env vars as the docker image; same defaults; `--tyr` and `--port` flags override.
 
 ```sh
-python3 dev-server.py --tyr http://staging-tyr.example:18000 --port 9000
+TYR_TOKEN=othertoken python3 dev-server.py --tyr http://staging-tyr.example:18000 --port 9000
 ```
 
-Both paths exist because titan-tyr v0.7.0 doesn't serve CORS — see [titan-tyr#14](https://github.com/Westfall-io/titan-tyr/issues/14). Once CORS lands, the proxy is optional; `config.json`'s `tyrBaseUrl` can point directly at the API and any static host works.
+Both paths exist because titan-tyr doesn't serve CORS yet — see [titan-tyr#14](https://github.com/Westfall-io/titan-tyr/issues/14). Once CORS lands, the proxy is optional; any static host works.
 
 ## Configuration
 
-`config.json` at the repo root, fetched once at app startup:
+`config.json` is **generated at startup** (by the docker entrypoint or `dev-server.py`) from `config.json.template`, with `${TYR_TOKEN}` substituted from the container env. The browser fetches it once on load.
 
 ```json
 {
   "tyrBaseUrl": "/tyr",
-  "tyrToken": "sysmlv2"
+  "tyrToken": "${TYR_TOKEN}"
 }
 ```
 
-| Key | Purpose |
-|---|---|
-| `tyrBaseUrl` | Where the app sends API requests. Default `/tyr` (works with `dev-server.py`). Set to a full origin (e.g. `https://tyr.example.com`) once CORS is in place. |
-| `tyrToken` | Bearer token sent on every request except `GET /health`. v0.7.0 uses the placeholder `sysmlv2`. |
+`tyrBaseUrl` is intentionally fixed at `/tyr` — it's always the local nginx proxy mount, regardless of where titan-tyr actually lives. Only `TYR_UPSTREAM` (proxy target) and `TYR_TOKEN` (bearer) are tunable per deploy. See the env-var table above.
 
-See [issue #2](https://github.com/Westfall-io/titan-mimiron/issues/2) on the long-term delivery mechanism (build-time vs runtime config vs `window.__ENV__`).
+This resolves [#2](https://github.com/Westfall-io/titan-mimiron/issues/2) — runtime config via container env vars beat the alternatives (build-time injection, `window.__ENV__`) for staying single-image-across-environments.
 
 ## What's in this build
 
@@ -98,14 +106,16 @@ titan-mimiron/
 ├── DESIGN.md         Long-term direction (graph, environments, file-path browsing)
 ├── DESIGN-MVP.md     Reconciled brief — source of truth for the MVP build
 ├── README.md         This file
-├── Dockerfile        nginx:alpine + static + /tyr proxy
+├── Dockerfile               nginx:alpine + static + /tyr proxy
 ├── .dockerignore
-├── nginx/            envsubst-processed nginx config template
-├── _model/           ICD knowledge-base structure notes
-├── config.json       Runtime config (tyrBaseUrl, tyrToken)
-├── dev-server.py     Static + proxy dev server (mirrors the Dockerfile)
-├── index.html        App shell
-├── style.css         Design tokens, layout, markdown styling
+├── VERSION                  Image version (consumed by build.sh + Dockerfile ARG)
+├── build.sh                 Tags image :$(cat VERSION) and :latest
+├── nginx/                   envsubst-processed nginx + config.json templates
+├── _model/                  ICD knowledge-base structure notes
+├── config.json.template     Static template — generated to config.json at startup
+├── dev-server.py            Static + proxy dev server (mirrors the Dockerfile)
+├── index.html               App shell
+├── style.css                Design tokens, layout, markdown styling
 └── src/
     ├── main.js              App bootstrap (loads config, mounts Vue, runs health probe)
     ├── App.js               Root component — header + 2-pane layout + error banner

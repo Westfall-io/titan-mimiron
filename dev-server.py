@@ -2,12 +2,14 @@
 """
 Dev server for titan-mimiron.
 
-Serves static files from the working directory and proxies any request
-prefixed with /tyr/ to the titan-tyr API. The proxy sidesteps CORS for
-local development — see titan-tyr#14 for the server-side fix that will
-make this script unnecessary.
+Mirrors the production Dockerfile shape — serves static assets and proxies
+/tyr/* to titan-tyr — so local iteration matches what runs in the image.
 
-  python3 dev-server.py [--port 8765] [--tyr http://localhost:18000]
+  python3 dev-server.py [--port 8765] [--tyr http://localhost:8000]
+
+Honors the same env vars as the docker image:
+  TYR_UPSTREAM  upstream titan-tyr URL                (default http://localhost:8000)
+  TYR_TOKEN     bearer token written into config.json (default sysmlv2)
 
 Then open http://localhost:8765/.
 """
@@ -15,13 +17,24 @@ Then open http://localhost:8765/.
 from __future__ import annotations
 import argparse
 import http.server
+import os
+import pathlib
 import socketserver
-import urllib.request
-import urllib.error
+import string
 import sys
+import urllib.error
+import urllib.request
 
 
 PROXY_PREFIX = "/tyr/"
+
+
+def render_config_json() -> None:
+    template = pathlib.Path("config.json.template").read_text()
+    body = string.Template(template).safe_substitute(
+        TYR_TOKEN=os.environ.get("TYR_TOKEN", "sysmlv2"),
+    )
+    pathlib.Path("config.json").write_text(body)
 
 
 def make_handler(tyr_base: str):
@@ -77,11 +90,14 @@ def make_handler(tyr_base: str):
 
 
 def main() -> None:
+    default_tyr = os.environ.get("TYR_UPSTREAM", "http://localhost:8000")
     p = argparse.ArgumentParser()
     p.add_argument("--port", type=int, default=8765)
-    p.add_argument("--tyr", default="http://localhost:18000",
-                   help="titan-tyr base URL")
+    p.add_argument("--tyr", default=default_tyr,
+                   help=f"titan-tyr upstream (default: {default_tyr})")
     args = p.parse_args()
+
+    render_config_json()
 
     tyr_base = args.tyr.rstrip("/")
     handler = make_handler(tyr_base)
