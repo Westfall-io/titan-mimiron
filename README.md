@@ -2,7 +2,7 @@
 
 The WatcherVault Web UI — a **read-only** browser into the WatcherVault catalog of software and contracts. titan-mimiron is intentionally read-only by design (see [DESIGN-MVP.md](./DESIGN-MVP.md) → "Scope: read-only, by design"); software registration and contract proposals happen via the API directly or via the `register-software` Claude skill in this repo.
 
-> **Status:** MVP shipped and dockerised. Three screens — software catalog (list + search + pagination), software detail (markdown + related contracts), contract detail — plus a polled health dot. The longer-term direction (graph + environments + file-path browsing) is captured in [DESIGN.md](./DESIGN.md).
+> **Status:** 0.2.0 — adds the Mermaid graph view. Four routes: catalog (list + search + pagination), software detail (markdown + related contracts), contract detail, and graph (all software as nodes, all contracts as edges). Polled health dot in the header. The four-view graph design (Software / DevOps / Interfaces tabs with part subtyping and environment switcher) from [DESIGN.md](./DESIGN.md) stays deferred — it's gated on titan-tyr exposing those concepts.
 
 ---
 
@@ -70,9 +70,10 @@ This resolves [#2](https://github.com/Westfall-io/titan-mimiron/issues/2) — ru
 | Catalog (home) | `GET /software?limit=&after=&match=` |
 | Software detail | `GET /software/{name}` + `GET /software/{name}/contracts` |
 | Contract detail | `GET /contracts/{contract_id}` |
+| Graph (`#/graph`) | `GET /software` + `GET /contracts` (paginated to completion) |
 | Header health dot | `GET /health` (polled every 30s) |
 
-Routing is hash-based: `#/`, `#/software/:name`, `#/contracts/:id`. Search debounces 300ms.
+Routing is hash-based: `#/`, `#/graph`, `#/software/:name`, `#/contracts/:id`. Search debounces 300ms.
 
 ## Tech stack
 
@@ -80,6 +81,7 @@ Routing is hash-based: `#/`, `#/software/:name`, `#/contracts/:id`. Search debou
 | --- | --- |
 | Framework | [Vue 3](https://vuejs.org/) + [Vue Router 4](https://router.vuejs.org/) via CDN ([resolved #1](https://github.com/Westfall-io/titan-mimiron/issues/1)) |
 | Markdown rendering | [marked.js](https://marked.js.org/) 12 + [DOMPurify](https://github.com/cure53/DOMPurify) 3 (sanitize before `v-html`) |
+| Graph rendering | [Mermaid](https://mermaid.js.org/) 11 (`graph LR`, dark theme) |
 | Typography | IBM Plex Sans / IBM Plex Mono (Google Fonts) |
 | Module resolution | Native `<script type="importmap">` — no bundler |
 | Build step | None |
@@ -130,7 +132,8 @@ titan-mimiron/
     └── views/
         ├── EmptyDetail.js
         ├── SoftwareDetail.js
-        └── ContractDetail.js
+        ├── ContractDetail.js
+        └── GraphView.js
 ```
 
 ## Deferred (not in this build)

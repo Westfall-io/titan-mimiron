@@ -63,7 +63,7 @@ Master-detail two-pane is the simplest MVP. A separate route per detail page is 
 
 titan-mimiron is **read-only** — it browses the catalog and renders contracts, nothing more. There is no Register form, no Edit form, no proposal/accept UI, and none are planned. Software registration happens out-of-band (the `register-software` Claude skill ships in this repo for that path); contract proposals happen via direct API calls. This is not a deferral — it is a permanent scope decision. New write-side proposals should be redirected to "use the CLI / skill instead."
 
-## MVP scope (two screens)
+## Scope
 
 Per the API team's recommendation, narrowed by the read-only-by-design decision above:
 
@@ -82,6 +82,13 @@ Per the API team's recommendation, narrowed by the read-only-by-design decision 
   - Issue tracker resolves to `<repo_uri>/issues` if `issue_tracker_uri` is `null`.
 - **Related contracts:** `GET /software/{name}/contracts?limit=50` — every contract where this software is owner or counterparty. Each row: `contract_id`, `owner`, `counterparty`, `version`, `updated_at`. **No `markdown` in the list — fetch per-row on click.**
 - Click a contract → `GET /contracts/{contract_id}`.
+
+### 3. Graph (added in 0.2.0)
+
+- **Route:** `#/graph`. Renders all software as nodes, all contracts as directed edges. Single view; the original DESIGN.md four-view tab system (Full / Software / DevOps / Interfaces) stays deferred until the API exposes Part subtyping and environments.
+- **Data:** walks `GET /software` and `GET /contracts` to completion (cursor pagination, `limit=100`, opaque `next`). One paginated request bag per resource — fine at current catalog sizes; revisit if the catalog grows past a few hundred entries.
+- **Renderer:** [Mermaid](https://mermaid.js.org/) 11 with `graph LR`, dark theme, `securityLevel: 'loose'` to enable the `click ID call fn(arg)` callback syntax. Software names are slug-validated server-side (`^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$`) so the loose label policy is safe by construction.
+- **Click semantics:** click a node → `/software/:name` (back to detail view). Edge clicks not supported in this version — the version label on the edge is enough to tell users which contract is which; navigate to either endpoint to find it in the contracts list.
 
 ---
 
@@ -135,12 +142,13 @@ Per the read-only-by-design decision above:
 
 | Feature | Why deferred |
 |---|---|
-| Mermaid graph visualisation | API doesn't expose connection layout data; the model lacks Part subtyping and environments needed for the original four views |
+| Four-view graph tabs (Full / Software / DevOps / Interfaces) | Needs Part subtyping and environments; today's API has only `software` + `contracts`. The single-view graph in 0.2.0 covers the basic case. |
 | Environment switcher | API has no environment concept |
 | Sidebar grouped by Part type | API has only `software` and `contracts` — no Part subtyping |
 | Git history panel | No `/history` endpoint; MVP has `version` + `updated_at` only |
 | File-path browsing | API addresses content by `name` (software) or `id` (contracts), not paths |
-| Search affecting graph dimming | No graph in MVP |
+| Search dimming the graph | Catalog search and graph view are separate routes today; cross-coupling is a v0.3.0 concern |
+| Edge clicks in the graph | Mermaid edge click handlers need post-render SVG manipulation; not worth the complexity until contract bodies surface differently than navigating to an endpoint |
 
 ---
 

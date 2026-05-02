@@ -61,5 +61,24 @@ export const listSoftwareContracts = (name, { limit = 50, after = null } = {}) =
   return request(`/software/${encodeURIComponent(name)}/contracts?${p}`);
 };
 
+export const listContracts = ({ limit = 50, after = null } = {}) => {
+  const p = new URLSearchParams({ limit });
+  if (after) p.set('after', after);
+  return request(`/contracts?${p}`);
+};
+
 export const getContract = (id) =>
   request(`/contracts/${encodeURIComponent(id)}`);
+
+// Walk a paginated endpoint to completion. Used by the graph view, where we
+// genuinely need every node + edge in one bag.
+export async function fetchAll(listFn, opts = {}) {
+  const all = [];
+  let after = null;
+  while (true) {
+    const data = await listFn({ ...opts, limit: 100, after });
+    all.push(...data.results);
+    if (!data.next) return all;
+    after = data.next;
+  }
+}

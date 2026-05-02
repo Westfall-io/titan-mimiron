@@ -23,6 +23,7 @@ export default {
   template: /* html */ `
     <header id="app-header">
       <div class="wordmark">WatcherVault</div>
+      <router-link to="/graph" class="header-link" active-class="active">graph</router-link>
       <input
         v-model="search"
         id="search"

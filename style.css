@@ -79,6 +79,22 @@ body { display: flex; flex-direction: column; }
 #search:focus { border-color: var(--accent); }
 #search::placeholder { color: var(--text3); }
 
+.header-link {
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text3);
+  padding: 4px 10px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  text-decoration: none;
+  transition: color 100ms, border-color 100ms;
+}
+
+.header-link:hover { color: var(--text); border-color: var(--border2); }
+.header-link.active { color: var(--accent); border-color: var(--accent); }
+
 .header-meta {
   margin-left: auto;
   display: flex;
@@ -294,6 +310,7 @@ body { display: flex; flex-direction: column; }
 
 .type-badge.type-software { background: rgba(74, 158, 255, 0.15); color: var(--accent); }
 .type-badge.type-contract { background: rgba(155, 114, 232, 0.15); color: var(--purple); }
+.type-badge.type-graph    { background: rgba(46, 196, 182, 0.15); color: var(--teal); }
 
 .topbar-name {
   font-family: var(--mono);
@@ -509,6 +526,30 @@ body { display: flex; flex-direction: column; }
 }
 
 .markdown-body a:hover { text-decoration: underline; }
+
+/* ───── Graph view ───── */
+
+.graph-container {
+  flex: 1;
+  padding: 24px;
+  overflow: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.graph-container svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* nodes are clickable — make that obvious on hover */
+.graph-container .node { cursor: pointer; }
+.graph-container .node:hover rect,
+.graph-container .node:hover polygon,
+.graph-container .node:hover circle {
+  filter: brightness(1.3);
+}
 
 /* ───── Error banner ───── */
 
