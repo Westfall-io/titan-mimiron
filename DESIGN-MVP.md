@@ -147,7 +147,7 @@ marked.js. Strip the `<!-- template: ...@X.Y.Z -->` stamp from visible output (p
 
 ## Open items
 
-1. **Framework decision** still pending (DESIGN.md open question 1). MVP scope is small enough that vanilla JS + ES modules remains viable; reconfirm before starting.
+1. ~~Framework decision still pending.~~ **Resolved (2026-05-02):** Vue 3 + Vue Router 4 via CDN + import map (no build step). See [#1](https://github.com/Westfall-io/titan-mimiron/issues/1).
 2. **Auth contradiction.** [titan-norgannon#7](https://github.com/Westfall-io/titan-norgannon/issues/7)-equivalent decision was "no authentication" between mimiron and tyr. The shipped API requires a static placeholder bearer (`sysmlv2`). Two readings: charitably, "no real per-caller auth" — placeholder satisfies the intent and the long-term policy holds; literally, the placeholder is auth and contradicts the decision. The MVP will send the placeholder because the API requires it. If the long-term policy is genuinely no-auth, the API team should know — they may want to drop the gate at the same time.
 3. **`TYR_BASE_URL` / `TYR_TOKEN` delivery** ([titan-norgannon#8](https://github.com/Westfall-io/titan-norgannon/issues/8)) — same delivery question, plus a secrets dimension once the token isn't a public placeholder.
 4. **Env-var name harmonisation.** `register-software` skill uses `TITAN_TYR_URL` / `TITAN_TYR_TOKEN`; this brief uses `TYR_BASE_URL` / `TYR_TOKEN`. Pick one set before build start.

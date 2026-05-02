@@ -57,9 +57,10 @@ Routing is hash-based: `#/`, `#/software/:name`, `#/contracts/:id`. Search debou
 
 | Concern | Choice |
 | --- | --- |
-| Language | Vanilla JavaScript (ES modules) — see [issue #1](https://github.com/Westfall-io/titan-mimiron/issues/1) |
-| Markdown rendering | [marked.js](https://marked.js.org/) 12 from `cdn.jsdelivr.net` |
+| Framework | [Vue 3](https://vuejs.org/) + [Vue Router 4](https://router.vuejs.org/) via CDN ([resolved #1](https://github.com/Westfall-io/titan-mimiron/issues/1)) |
+| Markdown rendering | [marked.js](https://marked.js.org/) 12 + [DOMPurify](https://github.com/cure53/DOMPurify) 3 (sanitize before `v-html`) |
 | Typography | IBM Plex Sans / IBM Plex Mono (Google Fonts) |
+| Module resolution | Native `<script type="importmap">` — no bundler |
 | Build step | None |
 
 ## Where it sits
@@ -90,15 +91,20 @@ titan-mimiron/
 ├── index.html        App shell
 ├── style.css         Design tokens, layout, markdown styling
 └── src/
-    ├── api.js        titan-tyr HTTP client (auth, errors, pagination)
-    ├── markdown.js   marked.js wrapper + template-stamp extraction
-    ├── router.js     Hash-based route table
-    ├── util.js       Small shared helpers (esc, relativeTime, repoLink)
-    ├── main.js       App bootstrap, search, health probe
+    ├── main.js              App bootstrap (loads config, mounts Vue, runs health probe)
+    ├── App.js               Root component — header + 2-pane layout + error banner
+    ├── store.js             Shared reactive state (search, health, fatal, retry)
+    ├── router.js            vue-router setup (3 hash routes)
+    ├── api.js               titan-tyr HTTP client (auth, errors, pagination)
+    ├── markdown.js          marked + DOMPurify; template-stamp extraction
+    ├── util.js              Small shared helpers (esc, relativeTime, repoLink)
+    ├── components/
+    │   ├── HeaderBar.js     Wordmark + search + health dot
+    │   └── CatalogPane.js   Paginated, debounced-search list
     └── views/
-        ├── catalog.js
-        ├── software.js
-        └── contract.js
+        ├── EmptyDetail.js
+        ├── SoftwareDetail.js
+        └── ContractDetail.js
 ```
 
 ## Deferred (not in this build)

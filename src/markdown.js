@@ -1,4 +1,5 @@
-import { marked } from 'https://cdn.jsdelivr.net/npm/marked@12/lib/marked.esm.js';
+import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 
 const STAMP_RE = /^<!--\s*template:\s*([a-z]+)@(\d+\.\d+\.\d+(?:-rc\d+)?)\s*-->\s*\n?/;
 
@@ -10,6 +11,9 @@ export function extractStamp(md) {
 
 marked.setOptions({ gfm: true, breaks: false });
 
+// markdown bodies are user-controllable (anyone who can register software
+// can put arbitrary markdown in their record), so sanitize the rendered
+// HTML before handing it to v-html.
 export function renderMarkdown(md) {
-  return marked.parse(md);
+  return DOMPurify.sanitize(marked.parse(md));
 }

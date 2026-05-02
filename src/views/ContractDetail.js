@@ -1,0 +1,65 @@
+import { ref, computed, watch, onMounted } from 'vue';
+import * as api from '../api.js';
+import { renderMarkdown, extractStamp } from '../markdown.js';
+import { relativeTime } from '../util.js';
+
+export default {
+  props: { id: { type: String, required: true } },
+  setup(props) {
+    const contract = ref(null);
+    const loading = ref(false);
+    const error = ref(null);
+
+    const stamp = computed(() =>
+      contract.value ? extractStamp(contract.value.markdown) : { kind: null, version: null, body: '' }
+    );
+    const renderedBody = computed(() =>
+      stamp.value.body ? renderMarkdown(stamp.value.body) : ''
+    );
+
+    async function load(id) {
+      loading.value = true;
+      error.value = null;
+      contract.value = null;
+      try {
+        contract.value = await api.getContract(id);
+      } catch (e) {
+        error.value = e;
+      } finally {
+        loading.value = false;
+      }
+    }
+
+    onMounted(() => load(props.id));
+    watch(() => props.id, (newId) => { if (newId) load(newId); });
+
+    return { contract, loading, error, stamp, renderedBody, relativeTime };
+  },
+  template: /* html */ `
+    <div class="detail-content">
+      <div v-if="loading && !contract" class="detail-loading">Loading…</div>
+      <div v-else-if="error" class="detail-error">
+        <div class="detail-error-status">HTTP {{ error.status || '?' }}</div>
+        <div class="detail-error-detail">{{ error.detail || error.message }}</div>
+      </div>
+      <template v-else-if="contract">
+        <div class="detail-topbar">
+          <div class="topbar-row">
+            <span class="type-badge type-contract">contract</span>
+            <span class="topbar-name">{{ contract.owner }} → {{ contract.counterparty }}</span>
+          </div>
+          <div class="topbar-row chips">
+            <span class="version-chip">v{{ contract.version }}</span>
+            <span v-if="stamp.version" class="template-chip" title="Template version">tpl {{ stamp.kind }}@{{ stamp.version }}</span>
+            <span class="updated-chip" :title="contract.updated_at">{{ relativeTime(contract.updated_at) }}</span>
+          </div>
+          <div class="topbar-row links">
+            <router-link :to="'/software/' + encodeURIComponent(contract.owner)" class="link-pill">owner: {{ contract.owner }}</router-link>
+            <router-link :to="'/software/' + encodeURIComponent(contract.counterparty)" class="link-pill">counterparty: {{ contract.counterparty }}</router-link>
+          </div>
+        </div>
+        <div class="detail-body markdown-body" v-html="renderedBody"></div>
+      </template>
+    </div>
+  `,
+};
