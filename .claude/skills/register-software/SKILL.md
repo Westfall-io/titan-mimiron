@@ -46,17 +46,19 @@ curl -fsS -H "Authorization: Bearer $TITAN_TYR_TOKEN" "$TITAN_TYR_URL/templates/
 
 ### 2. Gather the inputs
 
-The `POST /software` body needs four fields. Confirm each with the user before
-the request — don't invent values:
+The `POST /software` body has these fields. Confirm each with the user
+before the request — don't invent values:
 
-| Field      | Source                                                                                    |
-| ---------- | ----------------------------------------------------------------------------------------- |
-| `name`     | Unique identifier for this software in titan-tyr. Ask the user; suggest the repo name.    |
-| `repo_uri` | Git URL. Read from `git config --get remote.origin.url` if available; confirm with user.  |
-| `markdown` | The filled-in software template body (see step 3).                                        |
-| `version`  | Optional; defaults to `"1.0.0"`. Ask only if the user has a reason to start at something else. |
+| Field               | Source                                                                                     |
+| ------------------- | ------------------------------------------------------------------------------------------ |
+| `name`              | Unique identifier for this software in titan-tyr. Ask the user; suggest the repo name.     |
+| `repo_uri`          | Git URL. Read from `git config --get remote.origin.url` if available; confirm with user.   |
+| `issue_tracker_uri` | Optional. Where to file tickets if not the repo's default Issues tracker. Ask only if the user uses Jira/Linear/etc.; otherwise omit and consumers fall back to `<repo_uri>/issues`. Must be a valid `https://` URL — the API rejects `http://` and malformed values with 422. |
+| `aliases`           | Optional list of colloquial labels other agents may use to refer to this software (`payments`, `billing`, `front end`, `前端`). Used by `GET /software?match=<query>` for fuzzy lookup. Ask the user if there are common nicknames the canonical slug would miss; otherwise omit (defaults to `[]`). Per-entry rules: 1–128 chars, no control chars or newlines, Unicode allowed; case is preserved on storage; case-insensitive dedupe within a single payload. Cross-software collisions are allowed by design. |
+| `markdown`          | The filled-in software template body (see step 3).                                         |
+| `version`           | Optional; defaults to `"1.0.0"`. Ask only if the user has a reason to start at something else. |
 
-### 3. Fetch and fill the template
+### 3. Fetch the template
 
 Pull the current software template from the API:
 
@@ -64,60 +66,99 @@ Pull the current software template from the API:
 curl -fsS -H "Authorization: Bearer $TITAN_TYR_TOKEN" "$TITAN_TYR_URL/templates/software"
 ```
 
-The template is markdown with `<placeholder>`-style fill-ins. Walk the user
-through each section:
+### 4. Fill the template
 
-- **Owner / Repository** header — use what they've already given you.
-- **Purpose** — ask for a 2–4 sentence description.
-- **Ports** table — every external interface this software exposes or
-  consumes. Each port is a **logical operation** (one row covers all
-  HTTP methods/routes that implement the same operation), not one row
-  per HTTP method. Direction is from this software's perspective. See
-  the template for the in/out conventions.
-- **Notes** — anything else.
+The template is **self-describing** — its instructional blockquotes
+(`>` blocks) and any `### …` reference subsections are guidance for
+the human / agent doing the fill, not content to save. Read them,
+follow them, then strip them from the body you POST.
 
-If the user wants to skip the ports for now (common for a first registration),
-that's fine — leave the placeholder row and they can update later via
-`PUT /software/{name}`.
+Generic fill rules — these apply regardless of what's in the template:
 
-Resolve placeholder counterparties to real software names if they exist; flag
-unknown counterparties so the user can decide whether to register them first.
+1. **`<...>` placeholders are content slots.** Replace each with real
+   content and drop the angle brackets. `<software-name>` →
+   `payments-service`.
 
-### 4. Submit
+2. **Reserved meta-placeholders.** A small fixed set of `<...>` slots
+   are filled by the skill, not the user. The only one today:
+   - `<template-version>` — substitute with the active template
+     version you fetched from `GET /templates/<kind>` (currently
+     `2.1.0` for `software`). The stamp is usually
+     `<!-- template: software@<template-version> -->` at the top of
+     the body. Keep the comment line; replace the placeholder.
+
+3. **Instructional blockquotes are filler-only.** Any `>` block whose
+   content is guidance to the filler (rather than something the
+   software actually wants to record) gets stripped. Templates from
+   `software@2.4.0` / `contract@1.2.0` onward prefix every such
+   blockquote with `**DELETE WHEN FILLING IN.**` to make this
+   unambiguous — when you see that marker, drop the whole block.
+
+4. **Pure-reference H3 subsections are filler-only.** If an H3 only
+   exists to explain how to fill its parent section, drop it. If it
+   invites you to add real content (e.g. exclusions, exceptions
+   specific to this software), keep it iff you have real content.
+
+5. **Don't invent structure.** No new H2 sections beyond what the
+   template defined. Surplus content that doesn't fit goes in the
+   Notes section the template provides.
+
+The skill stops here on template specifics. Anything beyond these
+generic rules — what counts as a Port, how to phrase Purpose, etc. —
+belongs **in the template body itself**, not in this skill. If you
+find yourself wanting to add template-specific guidance here, that's
+a signal to `/propose-template-change` instead.
+
+### 5. Preview before submitting
+
+Show the user the **full filled markdown body** you intend to POST.
+Ask "ready to register?" Do not POST until the user confirms. If they
+want changes, iterate — re-show after each edit.
+
+### 6. Submit
+
+**Scratch files must live inside the project.** Do not write to `/tmp`,
+`$HOME`, or any path outside the working directory. Use `.scratch/` at
+the repo root (gitignored — create it if it doesn't exist) and clean up
+after.
+
+**Build the JSON body via a tool, not via shell heredocs or `-d "..."`.**
+The markdown will contain backticks, pipes, asterisks, double quotes,
+and unicode characters; `--data @file.json` written by Python or `jq`
+sidesteps every shell-escaping landmine.
 
 ```sh
+mkdir -p .scratch
+python3 -c "
+import json, pathlib
+print(json.dumps({
+    'name': 'payments-service',
+    'repo_uri': 'https://github.com/example/payments-service',
+    # 'aliases': ['payments', 'billing'],   # uncomment if the user gave any
+    'markdown': pathlib.Path('.scratch/body.md').read_text(),
+    'version': '1.0.0',
+}))
+" > .scratch/body.json
+
 curl -fsS -X POST \
      -H "Authorization: Bearer $TITAN_TYR_TOKEN" \
      -H "Content-Type: application/json" \
-     -d "$BODY" \
+     --data @.scratch/body.json \
      "$TITAN_TYR_URL/software"
 ```
 
-Where `$BODY` is JSON like:
-
-```json
-{
-  "name": "payments-service",
-  "repo_uri": "https://github.com/example/payments-service",
-  "markdown": "# payments-service\n...",
-  "version": "1.0.0"
-}
-```
-
-Build `$BODY` carefully — the `markdown` field needs proper JSON escaping for
-newlines and quotes. Prefer writing the body to a temp file and using
-`--data @file.json`, which sidesteps shell-escaping issues entirely.
-
-### 5. Report the result
+### 7. Report the result
 
 On `201`, summarise:
 
 > Registered `<name>` at version `1.0.0`. Software ID: `<uuid>`.
 > Read it back with: `curl -H 'Authorization: Bearer $TITAN_TYR_TOKEN' $TITAN_TYR_URL/software/<name>`
 
-Ask whether the user wants to also register interface contracts for this
-software (one `POST /contracts` per directed edge). Do NOT do that
-automatically — contracts need a counterparty software node to exist first.
+Ask whether the user wants to also register interface contracts for
+this software (one `POST /contracts` per directed edge between this
+software and another registered software). Do NOT do that
+automatically — both endpoints of the edge must already exist as
+software nodes.
 
 ## Error handling
 
