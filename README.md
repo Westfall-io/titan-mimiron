@@ -2,28 +2,70 @@
 
 The WatcherVault Web UI — a navigable, force-directed graph of the WatcherVault software architecture with side-by-side markdown rendering of the underlying contract for any selected element.
 
-> **Status:** pre-implementation. The design is captured in [DESIGN.md](./DESIGN.md); no application code has been written yet. Several questions need to be resolved before build can start — see [Open questions](#open-questions) below.
+> **Status:** MVP scaffolding shipped. The current build implements the read-only catalog described in [DESIGN-MVP.md](./DESIGN-MVP.md): software list with search, software detail with related contracts, and contract detail. The longer-term direction (graph + environments + register form) is captured in [DESIGN.md](./DESIGN.md).
 
 ---
 
-## What it is
+## Run it locally
 
-titan-mimiron is a **document reader with graph-based navigation**. Every element in the architecture — a software service, a Docker image, a running container, an interface contract — is backed by a markdown file in [titan-norganon](https://github.com/Westfall-io/titan-norganon). titan-mimiron lets a human:
+Requires Python 3.9+ and a running titan-tyr (`http://localhost:18000` by default).
 
-- Browse those elements as a Mermaid graph, filtered by environment and view.
-- Click any node (or sidebar item) to load and render its raw markdown contract.
-- Switch between environments (`common`, `local`, `staging`, `production`) and watch the graph reshape accordingly.
-- Search across the architecture.
-- Inspect version, git SHA, last-modified date, and full commit history for any contract.
+```sh
+python3 dev-server.py
+```
 
-It is **not** a database viewer, form renderer, or dashboard. The graph is the navigation; the markdown document is the content.
+Then open <http://localhost:8765/>.
 
----
+`dev-server.py` is a tiny static server that also proxies `/tyr/*` to titan-tyr. The proxy is a workaround for [titan-tyr#14](https://github.com/Westfall-io/titan-tyr/issues/14) (no CORS support yet) — once that lands, the static files can be served by anything (`python3 -m http.server`, nginx, an S3 bucket) and `config.json`'s `tyrBaseUrl` can point directly at the API.
+
+To point at a different titan-tyr:
+
+```sh
+python3 dev-server.py --tyr http://staging-tyr.example:18000 --port 9000
+```
+
+## Configuration
+
+`config.json` at the repo root, fetched once at app startup:
+
+```json
+{
+  "tyrBaseUrl": "/tyr",
+  "tyrToken": "sysmlv2"
+}
+```
+
+| Key | Purpose |
+|---|---|
+| `tyrBaseUrl` | Where the app sends API requests. Default `/tyr` (works with `dev-server.py`). Set to a full origin (e.g. `https://tyr.example.com`) once CORS is in place. |
+| `tyrToken` | Bearer token sent on every request except `GET /health`. v0.7.0 uses the placeholder `sysmlv2`. |
+
+See [issue #2](https://github.com/Westfall-io/titan-mimiron/issues/2) on the long-term delivery mechanism (build-time vs runtime config vs `window.__ENV__`).
+
+## What's in this build
+
+| Screen | Endpoints used |
+|---|---|
+| Catalog (home) | `GET /software?limit=&after=&match=` |
+| Software detail | `GET /software/{name}` + `GET /software/{name}/contracts` |
+| Contract detail | `GET /contracts/{contract_id}` |
+| Header health dot | `GET /health` (polled every 30s) |
+
+Routing is hash-based: `#/`, `#/software/:name`, `#/contracts/:id`. Search debounces 300ms.
+
+## Tech stack
+
+| Concern | Choice |
+| --- | --- |
+| Language | Vanilla JavaScript (ES modules) — see [issue #1](https://github.com/Westfall-io/titan-mimiron/issues/1) |
+| Markdown rendering | [marked.js](https://marked.js.org/) 12 from `cdn.jsdelivr.net` |
+| Typography | IBM Plex Sans / IBM Plex Mono (Google Fonts) |
+| Build step | None |
 
 ## Where it sits
 
 ```
-titan-norganon (Git repo of contracts)
+titan-norgannon (Git repo of contracts)
         │ cloned and served by
         ▼
 titan-tyr (REST API)
@@ -32,74 +74,39 @@ titan-tyr (REST API)
 titan-mimiron (this repo — Web UI)
 ```
 
-titan-mimiron talks **only** to titan-tyr. It never reaches into the contracts repo directly. All data — index, files, history, environments, search — is fetched at runtime from the titan-tyr base URL configured at deploy time.
-
----
-
-## Tech stack
-
-| Concern | Choice |
-| --- | --- |
-| Language | Vanilla JavaScript (ES modules) — pending framework decision |
-| Graph rendering | [Mermaid.js](https://mermaid.js.org/) 11.x (`flowchart LR`) |
-| Markdown rendering | [marked.js](https://marked.js.org/) 12.x |
-| Typography | IBM Plex Sans / IBM Plex Mono (Google Fonts) |
-| Build step | None planned for v1 — CDN imports |
-
-See [DESIGN.md → Technology](./DESIGN.md#technology) for full rationale and constraints.
-
----
-
-## Configuration
-
-The app must function against any running titan-tyr instance without code changes. The base URL is provided via:
-
-| Variable | Purpose |
-| --- | --- |
-| `TYR_BASE_URL` | Base URL of the titan-tyr REST API |
-
-How that variable is delivered to the running page (build-time injection vs `/config.json` vs `window.__ENV__`) is one of the open questions below.
-
----
-
-## API surface (consumed)
-
-| When | Endpoint |
-| --- | --- |
-| On load | `GET /api/environments` |
-| On load / env change | `GET /api/index?env={env}` |
-| On element select | `GET /api/files/{path}` |
-| On history expand | `GET /api/history/{path}` |
-| On search input | `GET /api/search?q={q}&env={env}` |
-
-Contract version, git SHA, and last-modified date are read from response headers (`X-Contract-Version`, `X-Git-SHA`, `X-Git-Last-Modified`) on `GET /api/files/{path}`.
-
----
+titan-mimiron talks **only** to titan-tyr. The mimiron ↔ tyr contract is registered in titan-tyr (see `GET /software/titan-mimiron/contracts`).
 
 ## Repository layout
 
 ```
 titan-mimiron/
-├── AGENTS.md     Operating rules for AI coding agents
-├── DESIGN.md     Full developer brief — single source of truth for the build
-└── README.md     This file
+├── AGENTS.md         Operating rules for AI coding agents
+├── DESIGN.md         Long-term direction (graph, environments, file-path browsing)
+├── DESIGN-MVP.md     Reconciled brief — source of truth for the MVP build
+├── README.md         This file
+├── _model/           ICD knowledge-base structure notes
+├── config.json       Runtime config (tyrBaseUrl, tyrToken)
+├── dev-server.py     Static + proxy dev server (CORS workaround)
+├── index.html        App shell
+├── style.css         Design tokens, layout, markdown styling
+└── src/
+    ├── api.js        titan-tyr HTTP client (auth, errors, pagination)
+    ├── markdown.js   marked.js wrapper + template-stamp extraction
+    ├── router.js     Hash-based route table
+    ├── util.js       Small shared helpers (esc, relativeTime, repoLink)
+    ├── main.js       App bootstrap, search, health probe
+    └── views/
+        ├── catalog.js
+        ├── software.js
+        └── contract.js
 ```
 
-Application source will land here once the open questions are resolved.
+## Deferred (not in this build)
 
----
+Tracked in [DESIGN-MVP.md → What's deferred](./DESIGN-MVP.md#whats-deferred): Mermaid graph, environment switcher, sidebar grouped by Part type, git history panel, file-path browsing, contract registration UI, proposal/accept flows, template management UI.
 
-## Open questions
-
-The build is gated on these decisions (from [DESIGN.md → Open Questions to Resolve Before Starting](./DESIGN.md#open-questions-to-resolve-before-starting)):
-
-1. **Framework** — vanilla JS or a framework?
-2. **`/api/index` response shape** — exact JSON contract with titan-tyr.
-3. **Authentication** — does titan-mimiron authenticate against titan-tyr, or sit behind a network boundary?
-4. **`TYR_BASE_URL` delivery** — build-time, runtime `/config.json`, or `window.__ENV__`?
-
----
+Software registration via `POST /software` is implemented as a Claude Code skill (`.claude/skills/register-software/`), not a UI form. Run it from Claude Code to add new software nodes.
 
 ## Contributing
 
-Read [AGENTS.md](./AGENTS.md) before making any commits — it covers commit-message format (gitmoji prefix), the no-Co-Authored-By rule, the push-after-every-commit rule, and the file-system scope boundary for AI agents working in this repo.
+Read [AGENTS.md](./AGENTS.md) before making any commits — gitmoji prefix on commit messages, no `Co-Authored-By` trailer, push after every commit, and stay within the file-system scope of this repo.

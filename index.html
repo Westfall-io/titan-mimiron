@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WatcherVault</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header id="app-header">
+    <div class="wordmark">WatcherVault</div>
+    <input id="search" type="search" placeholder="Search software…" autocomplete="off" spellcheck="false">
+    <div class="header-meta">
+      <span id="api-version" class="api-version"></span>
+      <span id="health-dot" class="health-dot health-unknown" title="API health: unknown"></span>
+    </div>
+  </header>
+  <main id="app-main">
+    <section class="pane catalog-pane" aria-label="software catalog">
+      <div id="catalog-list" class="catalog-list"></div>
+      <button id="load-more" class="load-more" hidden>Load more</button>
+    </section>
+    <section class="pane detail-pane" aria-label="detail">
+      <div id="detail-empty" class="detail-empty">select a node from the catalog</div>
+      <div id="detail-content" class="detail-content" hidden></div>
+    </section>
+  </main>
+  <div id="error-banner" class="error-banner" hidden></div>
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
