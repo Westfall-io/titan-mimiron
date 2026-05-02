@@ -1,12 +1,8 @@
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import mermaid from 'mermaid';
 import * as api from '../api.js';
 import { retryNonce } from '../store.js';
-
-// Mermaid `click ID call fn(arg)` resolves `fn` against `window`. Scoped to
-// this component's lifetime — set in onMounted, cleared in onUnmounted.
-const NAV_FN = '__mimironGraphNav';
 
 // Mermaid IDs must be alphanumeric/underscore. Software names are slug-shaped
 // — replace hyphens with underscores and prefix to guarantee an alpha leading char.
@@ -16,7 +12,6 @@ function buildSource(software, contracts) {
   const lines = ['graph LR'];
   for (const sw of software) {
     lines.push(`  ${slug(sw.name)}["${sw.name}"]`);
-    lines.push(`  click ${slug(sw.name)} call ${NAV_FN}("${sw.name}")`);
   }
   for (const c of contracts) {
     lines.push(
@@ -70,6 +65,51 @@ export default {
     }
     watch(selected, applySelection);
 
+    // Wire post-render click handlers for nodes and edges. We don't use
+    // Mermaid's `click ID call fn()` DSL because it relies on a global window
+    // function and is fragile across Mermaid versions; direct DOM listeners
+    // also let us make edges clickable (Mermaid has no edge-click DSL).
+    function wireClicks(software, contracts) {
+      const root = containerRef.value;
+      if (!root) return;
+
+      // Nodes — match Mermaid's flowchart node id pattern: `flowchart-<slug>-<n>`.
+      // Build slug→element map for both selection and click wiring.
+      nodeMap = {};
+      for (const el of root.querySelectorAll('.node')) {
+        const m = el.id.match(/-(s_[a-z0-9_]+)-\d+$/);
+        if (!m) continue;
+        const sw = software.find((s) => slug(s.name) === m[1]);
+        if (!sw) continue;
+        nodeMap[m[1]] = el;
+        el.style.cursor = 'pointer';
+        el.addEventListener('click', () => {
+          router.push(`/software/${encodeURIComponent(sw.name)}`);
+        });
+      }
+
+      // Edges — Mermaid renders edges in source order, both as <path class="flowchart-link">
+      // (or `.edgePath`) and as <g class="edgeLabel">. We iterate by source-order index
+      // and bind both to the corresponding contract id. The label is the friendlier
+      // click target; the path is a thin hit area but useful as a fallback.
+      const edgePaths = root.querySelectorAll('.edgePaths .edgePath, g.edgePath');
+      const edgeLabels = root.querySelectorAll('.edgeLabels .edgeLabel, g.edgeLabel');
+      contracts.forEach((c, i) => {
+        const handler = () =>
+          router.push(`/contracts/${encodeURIComponent(c.contract_id)}`);
+        const ep = edgePaths[i];
+        if (ep) {
+          ep.classList.add('edge-clickable');
+          ep.addEventListener('click', handler);
+        }
+        const el = edgeLabels[i];
+        if (el) {
+          el.classList.add('edge-label-clickable');
+          el.addEventListener('click', handler);
+        }
+      });
+    }
+
     async function render() {
       status.value = 'loading';
       error.value = null;
@@ -100,9 +140,8 @@ export default {
             fontFamily: 'IBM Plex Mono, ui-monospace, monospace',
             fontSize: '11px',
           },
-          // 'loose' enables the `click ID call fn()` callback syntax. Software
-          // names are slug-validated server-side, so node labels are safe.
-          securityLevel: 'loose',
+          // We bind clicks ourselves post-render — no need for 'loose'.
+          securityLevel: 'strict',
           flowchart: {
             useMaxWidth: true,
             htmlLabels: true,
@@ -117,12 +156,7 @@ export default {
         const { svg } = await mermaid.render('mimiron-graph', source);
         containerRef.value.innerHTML = svg;
 
-        nodeMap = {};
-        const nodeEls = containerRef.value.querySelectorAll('.node');
-        for (const el of nodeEls) {
-          const m = el.id.match(/-(s_[a-z0-9_]+)-\d+$/);
-          if (m) nodeMap[m[1]] = el;
-        }
+        wireClicks(software, contracts);
         applySelection();
 
         status.value = 'ready';
@@ -132,16 +166,7 @@ export default {
       }
     }
 
-    onMounted(() => {
-      window[NAV_FN] = (name) =>
-        router.push(`/software/${encodeURIComponent(name)}`);
-      render();
-    });
-
-    onUnmounted(() => {
-      delete window[NAV_FN];
-    });
-
+    onMounted(render);
     watch(retryNonce, render);
 
     return { status, error, counts, containerRef };
@@ -161,7 +186,7 @@ export default {
         <span class="legend-item"><span class="legend-swatch swatch-node"></span>{{ counts.software }} software</span>
         <span class="legend-item"><span class="legend-swatch swatch-edge"></span>{{ counts.contracts }} contracts</span>
         <span class="legend-spacer"></span>
-        <span class="legend-hint">click a node to inspect</span>
+        <span class="legend-hint">click a node or edge label to inspect</span>
       </div>
     </section>
   `,

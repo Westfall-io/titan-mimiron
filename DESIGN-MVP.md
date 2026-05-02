@@ -91,7 +91,7 @@ Per the API team's recommendation, narrowed by the read-only-by-design decision 
 - **Placement:** always-mounted center pane in the 3-pane layout (no `/graph` route — that was 0.2.0; in 0.3.0 the graph is permanent furniture). The catalog and detail panes flank it.
 - **Data:** walks `GET /software` and `GET /contracts` to completion (cursor pagination, `limit=100`, opaque `next`). One paginated request bag per resource — fine at current catalog sizes; revisit if the catalog grows past a few hundred entries. Fetched once on mount; the pane survives route changes.
 - **Renderer:** [Mermaid](https://mermaid.js.org/) 11 with `graph LR`, custom `theme: 'base'` themed to match the app's dark palette, `curve: 'basis'`, `securityLevel: 'loose'` to enable the `click ID call fn(arg)` callback syntax. Software names are slug-validated server-side (`^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$`) so the loose label policy is safe by construction.
-- **Click semantics:** click a node → `/software/:name`. The detail pane updates; the graph stays visible. Edge clicks not supported in this version — the version label on the edge is enough to tell users which contract is which; navigate to either endpoint to find it in the contracts list.
+- **Click semantics:** click a node → `/software/:name`; click an edge or its version label → `/contracts/:id`. The detail pane updates; the graph stays visible. Click handlers are wired post-render against the SVG (we don't use Mermaid's `click ID call fn()` DSL — too brittle across versions, and Mermaid has no edge-click DSL anyway). Contracts are matched to edges by source-order index, which is stable across Mermaid 11 flowchart renders.
 - **Selection highlight:** when the route is `/software/:name`, the matching graph node gets an accent stroke + glow. When the route is `/contracts/:id`, both endpoints (owner and counterparty) are highlighted. Re-rendering the SVG on every route change would be wasteful; instead we toggle a CSS class on the existing `<g class="node">` elements.
 - **Legend:** thin strip at the bottom of the pane with node count, edge count, and a "click a node to inspect" hint.
 
@@ -153,7 +153,6 @@ Per the read-only-by-design decision above:
 | Git history panel | No `/history` endpoint; MVP has `version` + `updated_at` only |
 | File-path browsing | API addresses content by `name` (software) or `id` (contracts), not paths |
 | Search dimming the graph | Catalog search and graph view are separate routes today; cross-coupling is a v0.3.0 concern |
-| Edge clicks in the graph | Mermaid edge click handlers need post-render SVG manipulation; not worth the complexity until contract bodies surface differently than navigating to an endpoint |
 
 ---
 

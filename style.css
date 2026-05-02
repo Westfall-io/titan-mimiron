@@ -638,6 +638,28 @@ body { display: flex; flex-direction: column; }
   color: var(--text) !important;
 }
 
+/* Edges — clickable post-render. Path hit areas are thin; label is the
+   easier target. Both are wired to navigate to /contracts/:id. */
+.graph-container .edge-clickable { cursor: pointer; }
+.graph-container .edge-clickable path {
+  pointer-events: stroke;
+  transition: stroke 100ms;
+}
+.graph-container .edge-clickable:hover path { stroke: var(--accent) !important; }
+
+.graph-container .edge-label-clickable { cursor: pointer; }
+.graph-container .edge-label-clickable foreignObject > div,
+.graph-container .edge-label-clickable .edgeLabel {
+  border-radius: 2px;
+  padding: 1px 4px !important;
+  transition: color 100ms, background 100ms;
+}
+.graph-container .edge-label-clickable:hover foreignObject > div,
+.graph-container .edge-label-clickable:hover .edgeLabel {
+  color: var(--accent) !important;
+  background: var(--bg3) !important;
+}
+
 .graph-legend {
   flex-shrink: 0;
   display: flex;

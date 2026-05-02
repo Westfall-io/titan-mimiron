@@ -73,7 +73,7 @@ This resolves [#2](https://github.com/Westfall-io/titan-mimiron/issues/2) — ru
 | Detail (right) — contract | `GET /contracts/{contract_id}` |
 | Header health dot | `GET /health` (polled every 30s) |
 
-Routing is hash-based: `#/`, `#/software/:name`, `#/contracts/:id`. Only the detail pane swaps on route change — the catalog and graph stay mounted. The graph highlights the route's selection (one node for software, both endpoints for a contract). Search debounces 300ms.
+Routing is hash-based: `#/`, `#/software/:name`, `#/contracts/:id`. Only the detail pane swaps on route change — the catalog and graph stay mounted. The graph highlights the route's selection (one node for software, both endpoints for a contract). In the graph: click a node to open the software, click an edge or its version label to open the contract. Search debounces 300ms.
 
 ## Tech stack
 
