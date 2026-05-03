@@ -180,7 +180,12 @@ export default {
           // We bind clicks ourselves post-render — no need for 'loose'.
           securityLevel: 'strict',
           flowchart: {
-            useMaxWidth: true,
+            // useMaxWidth: false renders the SVG at its intrinsic dimensions
+            // and lets the surrounding .graph-stage scroll if it overflows.
+            // useMaxWidth: true caused the entire graph to re-scale (nodes
+            // visibly moving) on any container width change — even subtle
+            // ones from sibling-pane layout shifts (mimiron#14).
+            useMaxWidth: false,
             htmlLabels: true,
             padding: 20,
             nodeSpacing: 50,
