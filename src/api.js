@@ -93,14 +93,20 @@ export const listContractHistory = (id, { limit = 50, after = null } = {}) => {
   return request(`/contracts/${encodeURIComponent(id)}/history?${p}`);
 };
 
-// Templates. The five kinds today: software, container, interaction, binding,
-// connection. `GET /templates/{kind}` returns the active body as raw markdown
-// (text/markdown). `GET /templates/{kind}/proposals` returns
-// `{kind, active_version, proposals: []}` — there is no per-version history
-// endpoint; "history" surfaces in mimiron as active_version + the pending RC
-// proposals. Order here is the same as the issue/proposal table:
-// part subtypes first, then contract subtypes.
-export const TEMPLATE_KINDS = ['software', 'container', 'interaction', 'binding', 'connection'];
+// Templates. The eight kinds today: software, container, image, pod, compose,
+// interaction, binding, connection. `GET /templates/{kind}` returns the active
+// body as raw markdown (text/markdown). `GET /templates/{kind}/proposals`
+// returns `{kind, active_version, proposals: []}` — there is no per-version
+// history endpoint; "history" surfaces in mimiron as active_version + the
+// pending RC proposals. Order here groups by lifecycle stage: source
+// (software), runtime (container/pod/compose with image as the artifact in
+// between), then contract subtypes.
+export const TEMPLATE_KINDS = ['software', 'image', 'container', 'pod', 'compose', 'interaction', 'binding', 'connection'];
+
+// Part subtypes — anything in `GET /parts?subtype=`. Distinct from contract
+// subtypes (interaction/binding/connection). Used by UsageSection to decide
+// whether a template kind walks parts or contracts.
+export const PART_SUBTYPES = ['software', 'container', 'image', 'pod', 'compose'];
 
 export const getTemplate = (kind) =>
   request(`/templates/${encodeURIComponent(kind)}`, { accept: 'text/markdown' });
