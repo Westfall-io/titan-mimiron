@@ -14,6 +14,36 @@ This skill mutates *what every caller sees* on the next
 do not run it without an explicit user confirmation on the exact
 contract + version about to land.
 
+## Before you start: confirm THIS side didn't originate the proposal
+
+Cross-team contract review is a two-party handshake: **whoever did NOT
+propose is the one who accepts.** If THIS side just ran
+`/propose-contract-change` (or otherwise posted the RC you're about
+to accept), accepting it now defeats the review — the counterparty
+had no chance to push back or counter-propose.
+
+The objection signal from the counterparty is a *higher RC* posted on
+the contract. The consent signal is them calling `/accept` (you'll see
+`active_version` move forward to the stripped version on the next
+`GET /contracts/<id>/proposals`). Neither happens via a GitHub ack —
+do not wait for one, but also do not pre-emptively accept your own
+proposal in its place.
+
+**Skip this guard only when:**
+
+- Single-operator setup: one human owns both sides of the contract,
+  one bearer token, no separate review party.
+- Counterparty has explicitly delegated acceptance back to you for
+  this proposal.
+
+Otherwise: stop. The counterparty accepts your proposals; you accept
+theirs.
+
+How to tell who originated the proposal: check the conversation /
+recent activity. If you ran `/propose-contract-change` against this
+contract earlier this session, that's almost certainly THIS side.
+When in doubt, ask the user.
+
 ## Server location
 
 Same env vars as the other titan-tyr skills:
@@ -56,14 +86,14 @@ gave you:
 
   ```sh
   curl -fsS -H "Authorization: Bearer $TITAN_TYR_TOKEN" \
-    "$TITAN_TYR_URL/software/{name}/contracts?limit=100"
+    "$TITAN_TYR_URL/parts/{name}/contracts?limit=100"
   ```
 
-  Each entry has `contract_id`, `owner`, `counterparty`, `version`,
-  `updated_at`. Render them as a numbered list (`owner → counterparty
-  v<version>`) and ask which one. If there's only one, suggest it as
-  the default. `404` → unknown software; stop and offer
-  `/find-software`.
+  Each entry has `contract_id`, `owner`, `counterparty`, `subtype`,
+  `version`, `updated_at`. Render them as a numbered list
+  (`owner → counterparty [<subtype>] v<version>`) and ask which one.
+  If there's only one, suggest it as the default. `404` → unknown
+  part; stop and offer `/find-part`.
 
 - **They gave nothing.** List all contracts (paginated):
 
@@ -72,9 +102,10 @@ gave you:
     "$TITAN_TYR_URL/contracts?limit=100"
   ```
 
-  Render `owner → counterparty v<version>` and ask which one. If the
-  result set is paginated (`next` is non-null), warn that you've shown
-  the first page and offer to drill in by software name instead.
+  Render `owner → counterparty [<subtype>] v<version>` and ask which
+  one. If the result set is paginated (`next` is non-null), warn that
+  you've shown the first page and offer to drill in by part name (or
+  by `?subtype=<interaction|binding>`) instead.
 
 ### 3. List open proposals on the chosen contract
 
@@ -87,9 +118,19 @@ Show `active_version` and the full list of open proposals
 (version + created_at). They must see what's available before picking.
 
 If `proposals` is empty, **stop**: there is nothing to accept. Tell
-the user — they likely want the propose flow first (currently raw
-`POST /contracts/{contract_id}/proposals`; sibling skill is on
-the roadmap).
+the user — they likely want `/propose-contract-change` first.
+
+**Always re-fetch this list, even if you saw it earlier in the
+session.** Cross-team coordination loops mean the counterparty may
+have posted a higher RC since you last looked — accepting an older
+RC silently overwrites their refinements with stale content.
+
+**Multi-RC for the same target.** If the listing shows multiple RCs
+for the same target (e.g. `1.2.0-rc1`, `1.2.0-rc2`), the **latest
+RC supersedes** the earlier ones — the earlier RCs are review
+artifacts kept for history. Default to the latest. If the user asks
+for an older RC, double-check that's intentional; they probably
+mean the latest.
 
 ### 4. Confirm the target version
 
@@ -103,6 +144,12 @@ Ask which proposal version to accept. Default sensibly:
 - If both exist for the same target (`X.Y.Z-rc2`, `X.Y.Z-rc3`,
   `X.Y.Z`), the bare version is almost always the right choice — RC
   rows are review artifacts.
+
+Once you've identified the version, **re-check the proposer guard**
+(see the "Before you start" section above) against this specific RC.
+If it was posted by THIS side, stop here — surface to the user that
+the counterparty is the natural acceptor and confirm before
+proceeding.
 
 ### 5. Show a unified diff vs the active body
 
@@ -135,6 +182,22 @@ print("".join(diff))
 If the diff is empty (proposal body identical to active), surface that
 loud — accepting will succeed but is a no-op for readers.
 
+**Also show the diff vs the prior RC** if the proposal you're
+accepting is `<target>-rcN` with N > 1 and `<target>-rc(N-1)` (or
+any earlier RC of the same target) is in the proposals list. The
+"what changed since the last RC" diff is the most useful view when
+the counterparty has revised an RC you originally drafted — it
+makes their additions reviewable in isolation, not buried inside the
+full vs-active diff. Label them clearly:
+
+```
+--- changes since rc1 (counterparty's revision) ---
+[diff between rc1 and rc2]
+
+--- net change vs active 1.1.1 (what will land) ---
+[diff between active and rc2]
+```
+
 ### 6. Confirm
 
 Ask explicitly:
@@ -164,7 +227,7 @@ No request body — the path is the entire input.
 
 On `200`, summarise the response:
 
-> Accepted. Contract `<owner> → <counterparty>` is now at
+> Accepted. `<subtype>` contract `<owner> → <counterparty>` is now at
 > `<active_version>` (promoted from `<promoted_from_version>` at
 > `<accepted_at>`).
 >
@@ -202,18 +265,34 @@ Don't auto-do them — surface them and ask.
   bearer token can hit `/accept`. In single-operator setups (one
   human owns both sides of the contract, one bearer token everywhere),
   the agent should run `/accept` itself rather than ask another party
-  to do it. Defer to the named role only when there are genuinely
-  separate teams with conflicting interests, and even then only as a
-  process choice, not a technical constraint.
+  to do it.
+- **Proposer-vs-acceptor is a separate distinction from owner-vs-counterparty.**
+  The owner-accepts rule above describes which *role* in the contract
+  holds the decision in steady state. The proposer-doesn't-accept rule
+  (in the "Before you start" section above) describes the *workflow*
+  invariant — whoever just ran `/propose-contract-change` against this
+  contract should not be the one accepting that same RC. These can
+  cooperate: e.g. mimiron (counterparty) proposes a change, titan-tyr
+  (owner) accepts. They can also conflict: titan-tyr (owner) proposes
+  a change to its own published surface, but the proposer rule says
+  mimiron (counterparty, the one consuming) does the accept — that's
+  the cross-team review gate doing its job. In genuinely cross-team
+  setups, the proposer rule wins.
 - **Contracts only.** This skill drives
   `POST /contracts/{contract_id}/proposals/{version}/accept`. Template
   proposals have a parallel endpoint
   (`POST /templates/{kind}/proposals/{version}/accept`) — that's
   `/accept-template-proposal`'s job.
-- **No propose-contract-change skill yet.** The propose half of the
-  contract loop is currently raw
-  `POST /contracts/{contract_id}/proposals`. A sibling skill mirroring
-  `/propose-template-change` is on the roadmap.
+- **Don't accept stable before the implementation lands.** If the
+  proposal commits the provider to behavior the API doesn't yet
+  serve (a new endpoint, a new field, a stricter obligation), accepting
+  the bare stable version creates a contract that is actively wrong
+  about runtime — consumers will read it, build against it, and break.
+  Stay on `-rcN` until the provider has shipped the implementation
+  and the consumer has verified end-to-end. The owner-side accept
+  happens *after* implementation, not before. RC iterations carry no
+  such risk because consumers are expected to treat them as
+  pre-release.
 - **No --data file is needed**, so the JSON-via-file scratch dance the
   register/update skills use does not apply here.
 - **There is no reject endpoint.** If you don't like a proposal, the
