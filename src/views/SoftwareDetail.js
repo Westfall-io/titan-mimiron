@@ -3,8 +3,10 @@ import { useRoute } from 'vue-router';
 import * as api from '../api.js';
 import { renderMarkdown, extractStamp } from '../markdown.js';
 import { relativeTime, repoLink, trackerLink } from '../util.js';
+import HistoryPanel from '../components/HistoryPanel.js';
 
 export default {
+  components: { HistoryPanel },
   props: { name: { type: String, required: true } },
   setup(props) {
     const route = useRoute();
@@ -96,6 +98,7 @@ export default {
             </router-link>
           </div>
         </div>
+        <history-panel kind="software" :id="sw.name" />
       </template>
     </div>
   `,

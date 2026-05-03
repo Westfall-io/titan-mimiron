@@ -70,6 +70,22 @@ export const listContracts = ({ limit = 50, after = null } = {}) => {
 export const getContract = (id) =>
   request(`/contracts/${encodeURIComponent(id)}`);
 
+// Per-resource version history. Pending titan-tyr#20 — implementation
+// against the `1.2.0-rc1` proposal on contract 94def627-…2439062.
+// Returns the same { results, next } shape as the other listings; each
+// entry is { version, updated_at }. 404 until the API ships the endpoint.
+export const listSoftwareHistory = (name, { limit = 50, after = null } = {}) => {
+  const p = new URLSearchParams({ limit });
+  if (after) p.set('after', after);
+  return request(`/software/${encodeURIComponent(name)}/history?${p}`);
+};
+
+export const listContractHistory = (id, { limit = 50, after = null } = {}) => {
+  const p = new URLSearchParams({ limit });
+  if (after) p.set('after', after);
+  return request(`/contracts/${encodeURIComponent(id)}/history?${p}`);
+};
+
 // Walk a paginated endpoint to completion. Used by the graph view, where we
 // genuinely need every node + edge in one bag.
 export async function fetchAll(listFn, opts = {}) {
