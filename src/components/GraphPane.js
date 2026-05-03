@@ -8,16 +8,34 @@ import { retryNonce, search } from '../store.js';
 // — replace hyphens with underscores and prefix to guarantee an alpha leading char.
 const slug = (name) => 'p_' + name.replace(/-/g, '_');
 
+// Per-contract-subtype edge encoding. Color stays unified (purple, set in CSS)
+// so part-subtype node colors remain the dominant visual; subtype is encoded
+// on the edge by line style + a label glyph instead. interaction is the
+// no-style default (most common, request/response); binding renders thicker
+// (structural composition); connection renders dashed (runtime link).
+const EDGE_SUBTYPE = {
+  interaction: { glyph: '▷', linkStyle: null },
+  binding:     { glyph: '▣', linkStyle: 'stroke-width:3px' },
+  connection:  { glyph: '┄', linkStyle: 'stroke-dasharray:6 4' },
+};
+
 function buildSource(parts, contracts) {
   const lines = ['graph LR'];
   for (const p of parts) {
     lines.push(`  ${slug(p.name)}["${p.name}"]`);
   }
-  for (const c of contracts) {
-    lines.push(
-      `  ${slug(c.owner)} -->|"v${c.version}"| ${slug(c.counterparty)}`
-    );
-  }
+  contracts.forEach((c) => {
+    const enc = EDGE_SUBTYPE[c.subtype];
+    const label = enc ? `${enc.glyph} v${c.version}` : `v${c.version}`;
+    lines.push(`  ${slug(c.owner)} -->|"${label}"| ${slug(c.counterparty)}`);
+  });
+  // linkStyle uses the edge's source-order index — same index we wire clicks
+  // by, so it stays in sync with contractList. Skip subtypes whose linkStyle
+  // is null to leave them at the theme default.
+  contracts.forEach((c, i) => {
+    const enc = EDGE_SUBTYPE[c.subtype];
+    if (enc?.linkStyle) lines.push(`  linkStyle ${i} ${enc.linkStyle}`);
+  });
   return lines.join('\n');
 }
 
@@ -81,7 +99,7 @@ export default {
     const route = useRoute();
     const status = ref('loading');
     const error = ref(null);
-    const counts = ref({ parts: 0, contracts: 0 });
+    const counts = ref({ parts: 0, contracts: 0, bySubtype: { interaction: 0, binding: 0, connection: 0 } });
     const containerRef = ref(null);
     // Focus = click-driven view filter. null = full graph; otherwise we hide
     // every node/edge that isn't part of the focused subgraph. Set on graph
@@ -341,7 +359,9 @@ export default {
         }
 
         const { parts, contracts } = filterForView(view.value, allParts, allContracts);
-        counts.value = { parts: parts.length, contracts: contracts.length };
+        const bySubtype = { interaction: 0, binding: 0, connection: 0 };
+        for (const c of contracts) if (c.subtype in bySubtype) bySubtype[c.subtype]++;
+        counts.value = { parts: parts.length, contracts: contracts.length, bySubtype };
 
         if (allParts.length === 0) {
           status.value = 'empty';
@@ -450,7 +470,9 @@ export default {
       </div>
       <div class="graph-legend">
         <span class="legend-item"><span class="legend-swatch swatch-node"></span>{{ counts.parts }} parts</span>
-        <span class="legend-item"><span class="legend-swatch swatch-edge"></span>{{ counts.contracts }} contracts</span>
+        <span class="legend-item" title="interaction (request/response)"><span class="legend-swatch swatch-edge edge-interaction"></span>▷ {{ counts.bySubtype.interaction }}</span>
+        <span class="legend-item" title="binding (structural composition)"><span class="legend-swatch swatch-edge edge-binding"></span>▣ {{ counts.bySubtype.binding }}</span>
+        <span class="legend-item" title="connection (runtime link)"><span class="legend-swatch swatch-edge edge-connection"></span>┄ {{ counts.bySubtype.connection }}</span>
         <span class="legend-spacer"></span>
         <button v-if="focus" type="button" class="legend-link" @click="clearFocus" title="ESC, or click empty graph background">clear focus</button>
         <span v-else class="legend-hint">click a node or edge label to focus</span>

@@ -1417,6 +1417,17 @@ a.template-chip:hover { opacity: 1; background: rgba(155, 114, 232, 0.1); }
   border-left: 5px solid var(--text3);
 }
 
+/* Per-contract-subtype edge swatches — mirror the linkStyle treatments
+   applied in GraphPane.buildSource so the legend documents the encoding. */
+.swatch-edge.edge-interaction { background: var(--text3); height: 2px; }
+.swatch-edge.edge-binding     { background: var(--text3); height: 3px; }
+.swatch-edge.edge-connection  {
+  background: transparent;
+  height: 0;
+  border-top: 2px dashed var(--text3);
+}
+.swatch-edge.edge-connection::after { display: none; }
+
 .legend-spacer { flex: 1; }
 .legend-hint { color: var(--text3); }
 
