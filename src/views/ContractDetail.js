@@ -49,6 +49,7 @@ export default {
           <div class="topbar-row">
             <span class="type-badge type-contract">contract</span>
             <span v-if="contract.subtype" class="subtype-chip" :class="'subtype-' + contract.subtype">{{ contract.subtype }}</span>
+            <span v-if="contract.connection_type" class="connection-type-chip" :title="'connection_type: ' + contract.connection_type">{{ contract.connection_type }}</span>
             <span class="topbar-name">{{ contract.owner }} → {{ contract.counterparty }}</span>
           </div>
           <div class="topbar-row chips">

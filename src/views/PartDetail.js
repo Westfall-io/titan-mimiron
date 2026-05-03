@@ -95,6 +95,7 @@ export default {
             >
               <span class="direction-chip" :class="'dir-' + direction(c)">{{ direction(c) }}</span>
               <span v-if="c.subtype" class="subtype-chip subtype-mini" :class="'subtype-' + c.subtype">{{ c.subtype }}</span>
+              <span v-if="c.connection_type" class="connection-type-chip connection-type-mini" :title="'connection_type: ' + c.connection_type">{{ c.connection_type }}</span>
               <span class="contract-other">{{ other(c) }}</span>
               <span class="contract-meta">v{{ c.version }} · {{ relativeTime(c.updated_at) }}</span>
             </router-link>
