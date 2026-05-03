@@ -753,25 +753,40 @@ body { display: flex; flex-direction: column; }
 }
 .graph-container .edge-clickable:hover path { stroke: var(--accent) !important; }
 
-/* Edge labels — explicit text color + background. Mermaid's `theme: 'base'`
-   (chosen in 0.3.0 to match the app palette) doesn't propagate our custom
-   `themeVariables` to edge label text, so without these the labels render
-   dark-on-dark and look blank (mimiron#12). Set on the default state; the
-   `.edge-label-clickable:hover` rule below overrides on hover. */
+/* Edge labels — Mermaid 11 wraps label text in
+   `<span class="edgeLabel"><p>text</p></span>`. The `<p>` (block) inside the
+   `<span>` (inline) is invalid HTML; browsers handle it by "breaking" the
+   inline around the block, which inflates the span's bounding box well past
+   the foreignObject's measured height — SVG then clips the label and it
+   looks blank (mimiron#12). With `theme: 'dark'` Mermaid injects its own
+   styles that work around this; with `theme: 'base'` (which we switched to
+   in 0.3.0) it doesn't.
+   Force the `<p>` to render inline so the span sizes to its actual content.
+   margin/padding reset is also necessary — default <p> margins are 1em. */
+.graph-container .edgeLabel p,
+.graph-container .nodeLabel p {
+  display: inline !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  line-height: inherit !important;
+}
+
 .graph-container .edgeLabel,
 .graph-container .edgeLabel foreignObject > div,
 .graph-container .edgeLabel span,
 .graph-container .edgeLabel p {
   color: var(--text2) !important;
   background-color: var(--bg2) !important;
-  font-family: var(--mono) !important;
 }
 
 .graph-container .edge-label-clickable { cursor: pointer; }
+/* No padding/margin here — Mermaid sizes the foreignObject to bare text
+   width (its measurement DOM lives outside .graph-container, so our CSS
+   doesn't apply during measurement). Anything that adds to the rendered
+   content's dimensions causes the text to overflow and SVG to clip it. */
 .graph-container .edge-label-clickable foreignObject > div,
 .graph-container .edge-label-clickable .edgeLabel {
   border-radius: 2px;
-  padding: 1px 4px !important;
   transition: color 100ms, background 100ms;
 }
 .graph-container .edge-label-clickable:hover foreignObject > div,
