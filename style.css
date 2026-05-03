@@ -709,6 +709,178 @@ a.template-chip:hover { opacity: 1; background: rgba(155, 114, 232, 0.1); }
 .history-pending a { color: var(--accent); text-decoration: none; }
 .history-pending a:hover { text-decoration: underline; }
 
+/* History `kind` discriminator (titan-tyr v0.15.0+). Body bumps and
+   subtype shifts are visually distinct so the timeline reads as
+   "v1.2.0 shipped, then it shifted, then v1.3.0 shipped." Pre-v0.15.0
+   responses lack kind — defaulted to body_bump in HistoryPanel. */
+.kind-glyph {
+  display: inline-block;
+  width: 14px;
+  text-align: center;
+  font-size: 11px;
+  font-family: var(--mono);
+}
+.kind-glyph.kind-bump  { color: var(--text3); }
+.kind-glyph.kind-shift { color: var(--amber); }
+
+.kind-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--amber);
+}
+
+.history-row.history-row-subtype_shift {
+  background: rgba(232, 168, 58, 0.04);
+  border-color: rgba(232, 168, 58, 0.25);
+}
+
+/* ───── Open subtype-shifts panel ───── */
+
+.shifts-panel { padding: 0 18px 18px; border-top: 1px solid var(--border); }
+.shifts-body { padding-top: 10px; }
+
+.shifts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.shift-row {
+  padding: 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.shift-shift {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.shift-arrow {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text3);
+}
+
+.shift-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 10px;
+  color: var(--text3);
+}
+
+.shift-actor { font-family: var(--mono); }
+.shift-anon { color: var(--coral); }
+
+.shift-rationale {
+  font-size: 11px;
+  color: var(--text2);
+  line-height: 1.5;
+  font-style: italic;
+  padding: 4px 0;
+  border-top: 1px solid var(--border);
+}
+
+.shift-impact {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+
+.impact-banner {
+  font-size: 10px;
+  color: var(--amber);
+  background: rgba(232, 168, 58, 0.08);
+  border: 1px solid rgba(232, 168, 58, 0.3);
+  border-radius: 2px;
+  padding: 6px 8px;
+  line-height: 1.5;
+}
+
+.impact-banner code {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--text);
+  background: rgba(232, 168, 58, 0.15);
+  padding: 1px 4px;
+  border-radius: 2px;
+}
+
+.impact-fail {
+  font-size: 10px;
+  color: var(--coral);
+  background: rgba(224, 90, 78, 0.08);
+  border: 1px solid rgba(224, 90, 78, 0.3);
+  border-radius: 2px;
+  padding: 6px 8px;
+}
+
+.impact-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.impact-rows-title {
+  font-size: 10px;
+  color: var(--text3);
+  font-family: var(--mono);
+}
+
+.impact-row {
+  padding: 6px 8px;
+  background: var(--bg2);
+  border-radius: 2px;
+  border-left: 2px solid var(--coral);
+}
+
+.impact-row-link {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text2);
+  text-decoration: none;
+}
+
+.impact-row-link:hover { color: var(--text); }
+
+.impact-reason {
+  font-size: 10px;
+  color: var(--text3);
+  margin-top: 2px;
+  font-style: italic;
+}
+
+.shift-accept-hint {
+  font-size: 10px;
+  color: var(--text3);
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+
+.shift-accept-hint code {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--accent);
+  background: rgba(74, 158, 255, 0.08);
+  padding: 1px 5px;
+  border-radius: 2px;
+}
+
 /* ───── Usage panel ───── */
 
 .usage-panel { padding: 0 18px 18px; border-top: 1px solid var(--border); }

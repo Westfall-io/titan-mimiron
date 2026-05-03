@@ -3,9 +3,10 @@ import * as api from '../api.js';
 import { renderMarkdown, extractStamp } from '../markdown.js';
 import { relativeTime } from '../util.js';
 import HistoryPanel from '../components/HistoryPanel.js';
+import OpenShiftsPanel from '../components/OpenShiftsPanel.js';
 
 export default {
-  components: { HistoryPanel },
+  components: { HistoryPanel, OpenShiftsPanel },
   props: { id: { type: String, required: true } },
   setup(props) {
     const contract = ref(null);
@@ -63,6 +64,7 @@ export default {
           </div>
         </div>
         <div class="detail-body markdown-body" v-html="renderedBody"></div>
+        <open-shifts-panel kind="contract" :id="contract.contract_id" />
         <history-panel kind="contract" :id="contract.contract_id" />
       </template>
     </div>

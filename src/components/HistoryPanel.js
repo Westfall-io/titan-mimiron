@@ -53,7 +53,16 @@ export default {
           const fn = props.kind === 'part' ? api.listPartHistory : api.listContractHistory;
           const data = await fn(props.id);
           activeVersion.value = null;
-          entries.value = (data.results || []).map((e) => ({ ...e, status: null }));
+          // Provider v0.15.0+ tags each entry with `kind` (body_bump |
+          // subtype_shift). Pre-v0.15.0 responses lack the field — default
+          // to body_bump per the contract's backwards-compat clause so a
+          // brief window of provider-old / consumer-new round-trips still
+          // renders correctly.
+          entries.value = (data.results || []).map((e) => ({
+            ...e,
+            status: null,
+            entryKind: e.kind || 'body_bump',
+          }));
         }
         fetched.value = true;
       } catch (e) {
@@ -113,10 +122,13 @@ export default {
             <span class="version-chip">v{{ activeVersion }}</span>
             <span class="current-marker">current</span>
           </div>
-          <div v-for="(e, i) in entries" :key="e.version" class="history-row">
+          <div v-for="(e, i) in entries" :key="(e.entryKind || 'x') + '-' + e.version + '-' + (e.updated_at || i)" class="history-row" :class="'history-row-' + (e.entryKind || 'body_bump')">
+            <span v-if="e.entryKind === 'subtype_shift'" class="kind-glyph kind-shift" title="subtype shift — accepted via /accept-…-subtype-shift skill">↻</span>
+            <span v-else-if="e.entryKind === 'body_bump'" class="kind-glyph kind-bump" title="body bump — accepted content proposal">●</span>
             <span class="version-chip">v{{ e.version }}</span>
+            <span v-if="e.entryKind === 'subtype_shift'" class="kind-label">subtype shift</span>
             <span v-if="e.status" class="proposal-chip">{{ e.status }}</span>
-            <span v-else-if="i === 0 && !activeVersion" class="current-marker">current</span>
+            <span v-else-if="i === 0 && !activeVersion && e.entryKind !== 'subtype_shift'" class="current-marker">current</span>
             <span v-if="e.updated_at" class="updated-chip" :title="e.updated_at">{{ relativeTime(e.updated_at) }}</span>
           </div>
         </div>
