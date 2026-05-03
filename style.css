@@ -1091,15 +1091,22 @@ a.template-chip:hover { opacity: 1; background: rgba(155, 114, 232, 0.1); }
   stroke: #2ed1bf !important;
 }
 
-/* selected-node highlight (current route's software, or both endpoints of the
-   current contract). Inline styles from Mermaid require !important. */
+/* selected-node highlight (current route's part, or both endpoints of the
+   current contract). Inline styles from Mermaid require !important. The
+   selection rules need to read clearly even when overlaid on a same-color
+   subtype tint (e.g. selecting a software node, where both selection and
+   subtype were previously blue). Off-white stroke + thicker width gives
+   the outline contrast against any subtype fill; the layered drop-shadow
+   (white inner halo + blue outer glow) makes the selection unmistakable. */
 .graph-container .node.node-selected rect,
 .graph-container .node.node-selected polygon,
 .graph-container .node.node-selected circle {
-  fill: var(--accent2) !important;
-  stroke: var(--accent) !important;
-  stroke-width: 2px !important;
-  filter: drop-shadow(0 0 6px rgba(74, 158, 255, 0.5));
+  fill: rgba(74, 158, 255, 0.45) !important;
+  stroke: var(--text) !important;
+  stroke-width: 3px !important;
+  filter:
+    drop-shadow(0 0 6px rgba(226, 228, 234, 0.65))
+    drop-shadow(0 0 14px rgba(74, 158, 255, 0.55));
 }
 
 .graph-container .node.node-selected .nodeLabel,
