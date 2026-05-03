@@ -497,19 +497,23 @@ a.template-chip:hover { opacity: 1; background: rgba(155, 114, 232, 0.1); }
   border: 1px solid transparent;
 }
 .subtype-chip.subtype-mini { padding: 1px 5px; font-size: 8px; }
+/* Part subtype palette — five visually distinct colors. The original
+   "runtime trio in teal family" idea (container/pod/compose all teal-ish)
+   wasn't actually helping the user tell pod from compose; freeing up
+   amber + green for them gives the 5 part subtypes maximum
+   distinguishability. Contracts (below) all share purple — distinguishing
+   3 contract subtypes by color is lower-signal than distinguishing the 5
+   part subtypes, since contracts in the graph are uniformly-styled edges
+   anyway. */
 .subtype-chip.subtype-software    { background: rgba(74, 158, 255, 0.10); color: var(--accent); border-color: var(--accent2); }
 .subtype-chip.subtype-image       { background: rgba(224, 90, 78, 0.10);  color: var(--coral);  border-color: rgba(224, 90, 78, 0.4); }
-/* Runtime trio (container/pod/compose) clustered in the teal family per
-   titan-tyr#33 dev guidance — distinguishable but related, since they're
-   all "where does it actually run" subtypes. Container = single runtime,
-   pod = brighter teal (cluster of containers), compose = deeper teal (stack
-   metadata). */
-.subtype-chip.subtype-container   { background: rgba(46, 196, 182, 0.10); color: var(--teal); border-color: rgba(46, 196, 182, 0.4); }
-.subtype-chip.subtype-pod         { background: rgba(77, 213, 200, 0.10); color: #4dd5c8; border-color: rgba(77, 213, 200, 0.45); }
-.subtype-chip.subtype-compose     { background: rgba(38, 166, 154, 0.10); color: #2ed1bf; border-color: rgba(38, 166, 154, 0.55); }
-.subtype-chip.subtype-interaction { background: rgba(155, 114, 232, 0.10); color: var(--purple); border-color: rgba(155, 114, 232, 0.4); }
-.subtype-chip.subtype-binding     { background: rgba(232, 168, 58, 0.10);  color: var(--amber);  border-color: rgba(232, 168, 58, 0.4); }
-.subtype-chip.subtype-connection  { background: rgba(61, 186, 122, 0.10);  color: var(--green);  border-color: rgba(61, 186, 122, 0.4); }
+.subtype-chip.subtype-container   { background: rgba(46, 196, 182, 0.10); color: var(--teal);   border-color: rgba(46, 196, 182, 0.4); }
+.subtype-chip.subtype-pod         { background: rgba(232, 168, 58, 0.10); color: var(--amber);  border-color: rgba(232, 168, 58, 0.4); }
+.subtype-chip.subtype-compose     { background: rgba(61, 186, 122, 0.10); color: var(--green);  border-color: rgba(61, 186, 122, 0.4); }
+/* All contract subtypes share purple — text label conveys which kind. */
+.subtype-chip.subtype-interaction,
+.subtype-chip.subtype-binding,
+.subtype-chip.subtype-connection  { background: rgba(155, 114, 232, 0.10); color: var(--purple); border-color: rgba(155, 114, 232, 0.4); }
 
 /* Sub-discriminator chip for connection contracts. Renders the
    connection_type label (one of: builds-from, instantiates, runs, member-of,
@@ -1053,15 +1057,60 @@ a.template-chip:hover { opacity: 1; background: rgba(155, 114, 232, 0.1); }
   filter: brightness(1.4);
 }
 
-/* selected-node highlight (current route's software, or both endpoints of the
-   current contract). Inline styles from Mermaid require !important. */
+/* Subtype-colored nodes. Wired in GraphPane.wireClicks: each node <g> gets a
+   `subtype-<kind>` class after Mermaid render. Mirrors the per-subtype chip
+   palette used in the catalog so the user's "subtype = color" mapping
+   carries across panes. !important is needed because Mermaid sets fill +
+   stroke as inline `style=` attributes, which beat plain class rules. The
+   selection highlight below also uses !important and is more specific
+   (`.node-selected` is added on top of `.subtype-…`), so it still wins. */
+.graph-container .node.subtype-software rect,
+.graph-container .node.subtype-software polygon,
+.graph-container .node.subtype-software circle {
+  fill: rgba(74, 158, 255, 0.18) !important;
+  stroke: var(--accent) !important;
+}
+.graph-container .node.subtype-image rect,
+.graph-container .node.subtype-image polygon,
+.graph-container .node.subtype-image circle {
+  fill: rgba(224, 90, 78, 0.18) !important;
+  stroke: var(--coral) !important;
+}
+.graph-container .node.subtype-container rect,
+.graph-container .node.subtype-container polygon,
+.graph-container .node.subtype-container circle {
+  fill: rgba(46, 196, 182, 0.18) !important;
+  stroke: var(--teal) !important;
+}
+.graph-container .node.subtype-pod rect,
+.graph-container .node.subtype-pod polygon,
+.graph-container .node.subtype-pod circle {
+  fill: rgba(232, 168, 58, 0.18) !important;
+  stroke: var(--amber) !important;
+}
+.graph-container .node.subtype-compose rect,
+.graph-container .node.subtype-compose polygon,
+.graph-container .node.subtype-compose circle {
+  fill: rgba(61, 186, 122, 0.18) !important;
+  stroke: var(--green) !important;
+}
+
+/* selected-node highlight (current route's part, or both endpoints of the
+   current contract). Inline styles from Mermaid require !important. The
+   selection rules need to read clearly even when overlaid on a same-color
+   subtype tint (e.g. selecting a software node, where both selection and
+   subtype were previously blue). Off-white stroke + thicker width gives
+   the outline contrast against any subtype fill; the layered drop-shadow
+   (white inner halo + blue outer glow) makes the selection unmistakable. */
 .graph-container .node.node-selected rect,
 .graph-container .node.node-selected polygon,
 .graph-container .node.node-selected circle {
-  fill: var(--accent2) !important;
-  stroke: var(--accent) !important;
-  stroke-width: 2px !important;
-  filter: drop-shadow(0 0 6px rgba(74, 158, 255, 0.5));
+  fill: rgba(74, 158, 255, 0.45) !important;
+  stroke: var(--text) !important;
+  stroke-width: 3px !important;
+  filter:
+    drop-shadow(0 0 6px rgba(226, 228, 234, 0.65))
+    drop-shadow(0 0 14px rgba(74, 158, 255, 0.55));
 }
 
 .graph-container .node.node-selected .nodeLabel,
