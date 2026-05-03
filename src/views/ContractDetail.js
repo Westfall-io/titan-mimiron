@@ -2,8 +2,10 @@ import { ref, computed, watch, onMounted } from 'vue';
 import * as api from '../api.js';
 import { renderMarkdown, extractStamp } from '../markdown.js';
 import { relativeTime } from '../util.js';
+import HistoryPanel from '../components/HistoryPanel.js';
 
 export default {
+  components: { HistoryPanel },
   props: { id: { type: String, required: true } },
   setup(props) {
     const contract = ref(null);
@@ -59,6 +61,7 @@ export default {
           </div>
         </div>
         <div class="detail-body markdown-body" v-html="renderedBody"></div>
+        <history-panel kind="contract" :id="contract.contract_id" />
       </template>
     </div>
   `,
