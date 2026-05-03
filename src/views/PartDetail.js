@@ -4,9 +4,10 @@ import * as api from '../api.js';
 import { renderMarkdown, extractStamp } from '../markdown.js';
 import { relativeTime, repoLink, trackerLink } from '../util.js';
 import HistoryPanel from '../components/HistoryPanel.js';
+import OpenShiftsPanel from '../components/OpenShiftsPanel.js';
 
 export default {
-  components: { HistoryPanel },
+  components: { HistoryPanel, OpenShiftsPanel },
   props: { name: { type: String, required: true } },
   setup(props) {
     const route = useRoute();
@@ -101,6 +102,7 @@ export default {
             </router-link>
           </div>
         </div>
+        <open-shifts-panel kind="part" :id="part.name" />
         <history-panel kind="part" :id="part.name" />
       </template>
     </div>

@@ -73,6 +73,14 @@ export const listPartHistory = (name, { limit = 50, after = null } = {}) => {
   return request(`/parts/${encodeURIComponent(name)}/history?${p}`);
 };
 
+// Subtype-shift proposals (titan-tyr v0.15.0+). Read-only from mimiron's
+// perspective per the human-observability stance — propose/accept happen
+// via the canonical Claude Code skills, not via UI buttons. The listing
+// includes both `status=="proposal"` (pending) and `status=="accepted"`
+// (history) entries; consumer filters client-side.
+export const listPartSubtypeProposals = (name) =>
+  request(`/parts/${encodeURIComponent(name)}/subtype-proposals`);
+
 // Contracts (titan-tyr v0.10.0 added subtype: `interaction` | `binding`).
 // Owner/counterparty keys on contract responses are unchanged from v1.x —
 // the field rename to `owner_part`/`counterparty_part` is only on POST input,
@@ -92,6 +100,9 @@ export const listContractHistory = (id, { limit = 50, after = null } = {}) => {
   if (after) p.set('after', after);
   return request(`/contracts/${encodeURIComponent(id)}/history?${p}`);
 };
+
+export const listContractSubtypeProposals = (id) =>
+  request(`/contracts/${encodeURIComponent(id)}/subtype-proposals`);
 
 // Templates. The eight kinds today: software, container, image, pod, compose,
 // interaction, binding, connection. `GET /templates/{kind}` returns the active
