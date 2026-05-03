@@ -16,6 +16,9 @@
   --teal: #2ec4b6;
   --sans: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
   --mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
+  /* Detail-pane width — set by the resize-handle drag in App.js. Default
+     restored from localStorage on mount; clamped to [280, 50% window]. */
+  --detail-width: 380px;
 }
 
 * { box-sizing: border-box; }
@@ -146,7 +149,9 @@ html, body {
 #app-main {
   /* Sized by body's grid (`auto 1fr` rows). Don't need flex: 1 anymore. */
   display: grid;
-  grid-template-columns: 240px minmax(0, 1fr) 380px;
+  /* Columns: catalog, graph (absorbs free space), resize handle, detail.
+     Detail width is a CSS var set by the resize handle in App.js. */
+  grid-template-columns: 240px minmax(0, 1fr) 6px var(--detail-width);
   /* Explicit row sizing — without this the implicit row defaults to
      min-content and grows to fit the tallest pane's content (e.g. a long
      markdown body), which stretched the graph-pane to match and made the
@@ -193,8 +198,31 @@ html, body {
 
 .detail-pane {
   background: var(--bg2);
-  border-left: 1px solid var(--border);
+  /* Border now lives on the resize-handle column, not the detail pane. */
 }
+
+/* Resize handle between graph-pane and detail-pane. The grid column is
+   6px wide so the hit area is comfortable; the visible divider is
+   centered inside it. */
+.resize-handle {
+  position: relative;
+  cursor: col-resize;
+  background: var(--border);
+  transition: background 100ms;
+  /* Prevent the browser from interpreting drags as text selection. */
+  touch-action: none;
+  user-select: none;
+}
+
+.resize-handle:hover,
+.resize-handle:active,
+body.is-resizing .resize-handle { background: var(--accent); }
+
+/* While a resize drag is in flight, force the col-resize cursor everywhere
+   so it doesn't flicker as the pointer crosses other elements, and disable
+   text selection globally. */
+body.is-resizing { cursor: col-resize !important; user-select: none; }
+body.is-resizing * { cursor: col-resize !important; user-select: none !important; }
 
 /* ───── Catalog ───── */
 
