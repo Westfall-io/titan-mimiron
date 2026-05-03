@@ -12,7 +12,8 @@ import UsageSection from '../components/UsageSection.js';
 //
 // 404 path: legacy stamps (e.g. `contract` from before the v0.10.0 rename
 // to `interaction`) won't resolve. Render a "template not found" state with
-// a hint rather than a generic error.
+// a hint rather than a generic error. The kind list mirrors api.TEMPLATE_KINDS;
+// `connection` was added alongside titan-tyr v0.11.0.
 export default {
   components: { HistoryPanel, UsageSection },
   props: { kind: { type: String, required: true } },
@@ -60,9 +61,10 @@ export default {
         <div class="detail-error-status">no template named <code>{{ $route.params.kind }}</code></div>
         <div class="detail-error-detail">
           The current template kinds are <code>software</code>, <code>container</code>,
-          <code>interaction</code>, and <code>binding</code>. Legacy stamps
-          (e.g. <code>contract</code> before the v0.10.0 rename to <code>interaction</code>)
-          won't resolve — the body that linked here was likely stamped before the rename.
+          <code>interaction</code>, <code>binding</code>, and <code>connection</code>.
+          Legacy stamps (e.g. <code>contract</code> before the v0.10.0 rename to
+          <code>interaction</code>) won't resolve — the body that linked here was
+          likely stamped before the rename.
         </div>
       </div>
       <div v-else-if="error" class="detail-error">
