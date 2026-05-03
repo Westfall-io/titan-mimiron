@@ -287,21 +287,52 @@ body.is-resizing * { cursor: col-resize !important; user-select: none !important
 
 .catalog-error { color: var(--coral); }
 
-.load-more {
-  margin: 8px 16px 16px;
-  padding: 8px;
-  background: var(--bg3);
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  color: var(--text2);
-  font-family: var(--sans);
-  font-size: 11px;
-  cursor: pointer;
-  transition: border-color 100ms, color 100ms;
+/* ───── Grouped sections (catalog) ───── */
+
+.catalog-section {
+  border-bottom: 1px solid var(--border);
 }
 
-.load-more:hover:not(:disabled) { border-color: var(--accent); color: var(--text); }
-.load-more:disabled { opacity: 0.6; cursor: default; }
+.catalog-section:last-child { border-bottom: none; }
+
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  color: var(--text3);
+  transition: color 100ms, background 100ms;
+}
+
+.section-header:hover { color: var(--text2); background: var(--bg2); }
+.section-header:focus-visible { outline: 1px solid var(--accent); outline-offset: -2px; }
+
+.section-header .chevron {
+  display: inline-block;
+  width: 10px;
+  font-size: 10px;
+  color: var(--text3);
+  transition: transform 120ms;
+}
+
+.section-header .chevron.open { transform: rotate(90deg); }
+
+.section-spacer { flex: 1; }
+
+.section-rows {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 6px;
+}
+
+.contract-pair {
+  font-family: var(--mono);
+  font-size: 12px;
+}
 
 /* ───── Chips ───── */
 
