@@ -2,6 +2,7 @@ import { ref, computed, watch, onMounted } from 'vue';
 import * as api from '../api.js';
 import { renderMarkdown, extractStamp } from '../markdown.js';
 import HistoryPanel from '../components/HistoryPanel.js';
+import UsageSection from '../components/UsageSection.js';
 
 // Detail page for a single template kind. The body is the active template
 // markdown as served by `GET /templates/{kind}`. The first line of that body
@@ -13,7 +14,7 @@ import HistoryPanel from '../components/HistoryPanel.js';
 // to `interaction`) won't resolve. Render a "template not found" state with
 // a hint rather than a generic error.
 export default {
-  components: { HistoryPanel },
+  components: { HistoryPanel, UsageSection },
   props: { kind: { type: String, required: true } },
   setup(props) {
     const body = ref(null);
@@ -81,6 +82,7 @@ export default {
         </div>
         <div class="detail-body markdown-body" v-html="renderedBody"></div>
         <history-panel kind="template" :id="proposals.kind" />
+        <usage-section :kind="proposals.kind" :active-version="proposals.active_version" />
       </template>
     </div>
   `,
