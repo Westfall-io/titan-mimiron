@@ -152,6 +152,9 @@ body { display: flex; flex-direction: column; }
     var(--bg);
   border-right: 1px solid var(--border);
   position: relative;
+  /* Isolate the pane's layout from sibling-pane changes so the rendered
+     graph SVG isn't poked by detail-pane content swaps (mimiron#14). */
+  contain: layout;
 }
 
 .detail-pane {
@@ -663,23 +666,24 @@ body { display: flex; flex-direction: column; }
   position: relative;
   overflow: auto;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  /* `safe center` keeps content centered when it fits, and aligns to start
+     (so it isn't clipped) when it overflows — needed because the SVG now
+     renders at its intrinsic size (mimiron#14) instead of scaling to fit. */
+  align-items: safe center;
+  justify-content: safe center;
 }
 
 .graph-container {
-  width: 100%;
-  height: 100%;
   padding: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .graph-container svg {
-  max-width: 100%;
-  height: auto;
   display: block;
+  /* No max-width / height: auto — those caused Mermaid's SVG to scale with
+     container width, which made nodes visibly move on any sibling-pane
+     layout shift. With useMaxWidth: false in the Mermaid config, the SVG
+     now has fixed intrinsic dimensions; .graph-stage scrolls if it's
+     larger than the viewport. */
 }
 
 .graph-loading,
