@@ -1,4 +1,4 @@
-import { ref, computed, watch, onMounted } from 'vue';
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import mermaid from 'mermaid';
 import * as api from '../api.js';
@@ -29,6 +29,13 @@ export default {
     const error = ref(null);
     const counts = ref({ parts: 0, contracts: 0 });
     const containerRef = ref(null);
+    // Focus = click-driven view filter. null = full graph; otherwise we hide
+    // every node/edge that isn't part of the focused subgraph. Set on graph
+    // click, cleared by the legend link, ESC, or empty-background click.
+    // The route watcher below keeps focus following the route — landing on a
+    // node outside the current subgraph re-focuses around the new node so the
+    // walk-the-graph use-case keeps working even after a catalog/header nav.
+    const focus = ref(null);   // null | { kind: 'node'|'edge', id: string }
     let nodeMap = {};
     // Parts + contracts + edge-element refs survive past render() so the
     // search-dimming watcher can recompute against fresh data without a
@@ -71,6 +78,108 @@ export default {
       }
     }
     watch(selected, applySelection);
+
+    // Compute the subgraph that should remain visible for the current focus.
+    // Node focus: the node itself + every node one hop away + every edge that
+    // touches it. Edge focus: just the two endpoints + that single edge.
+    function computeSubgraph(f) {
+      if (!f) return null;
+      const visibleNodes = new Set();
+      const visibleContracts = new Set();   // by contractList index
+      if (f.kind === 'node') {
+        visibleNodes.add(f.id);
+        contractList.forEach((c, i) => {
+          const o = slug(c.owner);
+          const cp = slug(c.counterparty);
+          if (o === f.id || cp === f.id) {
+            visibleNodes.add(o);
+            visibleNodes.add(cp);
+            visibleContracts.add(i);
+          }
+        });
+      } else if (f.kind === 'edge') {
+        contractList.forEach((c, i) => {
+          if (c.contract_id === f.id) {
+            visibleNodes.add(slug(c.owner));
+            visibleNodes.add(slug(c.counterparty));
+            visibleContracts.add(i);
+          }
+        });
+      }
+      return { visibleNodes, visibleContracts };
+    }
+
+    function applyFocus() {
+      const sub = computeSubgraph(focus.value);
+      if (!sub) {
+        for (const el of Object.values(nodeMap)) el.classList.remove('node-hidden');
+        for (const el of edgePathEls) el?.classList.remove('edge-hidden');
+        for (const el of edgeLabelEls) el?.classList.remove('edge-hidden');
+        return;
+      }
+      for (const [s, el] of Object.entries(nodeMap)) {
+        el.classList.toggle('node-hidden', !sub.visibleNodes.has(s));
+      }
+      edgePathEls.forEach((el, i) =>
+        el?.classList.toggle('edge-hidden', !sub.visibleContracts.has(i))
+      );
+      edgeLabelEls.forEach((el, i) =>
+        el?.classList.toggle('edge-hidden', !sub.visibleContracts.has(i))
+      );
+    }
+    watch(focus, applyFocus);
+
+    // Keep focus following the route. The graph click handlers set focus
+    // *before* calling router.push, so the immediately-following watcher
+    // tick is a no-op on those (the new route's entity is the focus center).
+    // The watcher matters for navigations that DIDN'T originate in the
+    // graph — catalog row, header search, browser back, contract row in
+    // PartDetail, etc. While focus is active, those navs re-focus the graph
+    // around the new entity so the walk-the-graph mental model holds. With
+    // no focus active, the watcher is inert.
+    watch(
+      () => [route.name, route.params.name, route.params.id],
+      ([name, partName, contractId]) => {
+        if (!focus.value) return;
+        if (name === 'part' && partName) {
+          focus.value = { kind: 'node', id: slug(partName) };
+        } else if (name === 'contract' && contractId) {
+          focus.value = { kind: 'edge', id: contractId };
+        } else if (name === 'home') {
+          focus.value = null;
+        }
+      }
+    );
+
+    // Clear-focus is a full reset: drop the focus filter AND deselect the
+    // current route. The user reads "clear focus" as "show me everything
+    // again" — leaving the markdown body + .node-selected highlight up
+    // would be a half-clear. Route push to '/' fires the route watcher,
+    // which clears focus.value (idempotent — we already nulled it here),
+    // and updates `selected` (computed from route) so applySelection
+    // removes the highlight.
+    function clearFocus() {
+      focus.value = null;
+      if (route.name !== 'home') router.push('/');
+    }
+
+    // ESC clears focus (when focus is active). Window-level so it works
+    // regardless of where focus is in the page — the graph filter is a
+    // viewport mode, not a focused-input.
+    function onKeydown(e) {
+      if (e.key === 'Escape' && focus.value) clearFocus();
+    }
+    onMounted(() => window.addEventListener('keydown', onKeydown));
+    onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
+
+    // Click on the graph background (anywhere that isn't a node or edge)
+    // clears focus. Node/edge handlers stopPropagation to keep their click
+    // from also triggering this clear.
+    function onContainerClick(e) {
+      if (!focus.value) return;
+      if (e.target.closest('.node, .edgePath, g.edgePath, .edgeLabel, g.edgeLabel')) return;
+      clearFocus();
+    }
 
     // Search-dimming: nodes whose name/aliases don't substring-match the
     // current search drop to low opacity; edges where neither endpoint
@@ -120,20 +229,29 @@ export default {
         if (!part) continue;
         nodeMap[m[1]] = el;
         el.style.cursor = 'pointer';
-        el.addEventListener('click', () => {
+        el.addEventListener('click', (e) => {
+          e.stopPropagation();
+          focus.value = { kind: 'node', id: slug(part.name) };
           router.push(`/parts/${encodeURIComponent(part.name)}`);
         });
       }
 
-      // Edges — Mermaid renders edges in source order, both as <path class="flowchart-link">
-      // (or `.edgePath`) and as <g class="edgeLabel">. We iterate by source-order index
-      // and bind both to the corresponding contract id. The label is the friendlier
-      // click target; the path is a thin hit area but useful as a fallback.
-      edgePathEls = Array.from(root.querySelectorAll('.edgePaths .edgePath, g.edgePath'));
-      edgeLabelEls = Array.from(root.querySelectorAll('.edgeLabels .edgeLabel, g.edgeLabel'));
+      // Edges — Mermaid renders edges in source order, with each edge as a
+      // direct child of `.edgePaths` (the path) and `.edgeLabels` (the label
+      // group). The path's class set varies across Mermaid versions
+      // (`.flowchart-link`, `.edge-thickness-normal`, `LS-…`/`LE-…`) and
+      // notably does NOT include `.edgePath` in 11.x — so we match by parent
+      // (`.edgePaths > *`) instead, which is stable across versions. Labels
+      // similarly are direct children of `.edgeLabels`. We iterate in
+      // source-order index and bind both to the corresponding contract id.
+      edgePathEls = Array.from(root.querySelectorAll('.edgePaths > *'));
+      edgeLabelEls = Array.from(root.querySelectorAll('.edgeLabels > *'));
       contracts.forEach((c, i) => {
-        const handler = () =>
+        const handler = (e) => {
+          e.stopPropagation();
+          focus.value = { kind: 'edge', id: c.contract_id };
           router.push(`/contracts/${encodeURIComponent(c.contract_id)}`);
+        };
         const ep = edgePathEls[i];
         if (ep) {
           ep.classList.add('edge-clickable');
@@ -203,6 +321,7 @@ export default {
         wireClicks(parts, contracts);
         applySelection();
         applyDimming();
+        applyFocus();
 
         status.value = 'ready';
       } catch (e) {
@@ -214,7 +333,7 @@ export default {
     onMounted(render);
     watch(retryNonce, render);
 
-    return { status, error, counts, containerRef };
+    return { status, error, counts, containerRef, focus, clearFocus, onContainerClick };
   },
   template: /* html */ `
     <section class="pane graph-pane" aria-label="architecture graph">
@@ -225,13 +344,19 @@ export default {
           <div class="graph-error-status">graph load failed</div>
           <div class="graph-error-detail">{{ error.detail || error.message }}</div>
         </div>
-        <div ref="containerRef" v-show="status === 'ready'" class="graph-container"></div>
+        <div
+          ref="containerRef"
+          v-show="status === 'ready'"
+          class="graph-container"
+          @click="onContainerClick"
+        ></div>
       </div>
       <div class="graph-legend">
         <span class="legend-item"><span class="legend-swatch swatch-node"></span>{{ counts.parts }} parts</span>
         <span class="legend-item"><span class="legend-swatch swatch-edge"></span>{{ counts.contracts }} contracts</span>
         <span class="legend-spacer"></span>
-        <span class="legend-hint">click a node or edge label to inspect</span>
+        <button v-if="focus" type="button" class="legend-link" @click="clearFocus" title="ESC, or click empty graph background">clear focus</button>
+        <span v-else class="legend-hint">click a node or edge label to focus</span>
       </div>
     </section>
   `,
