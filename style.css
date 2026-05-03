@@ -1053,6 +1053,44 @@ a.template-chip:hover { opacity: 1; background: rgba(155, 114, 232, 0.1); }
   filter: brightness(1.4);
 }
 
+/* Subtype-colored nodes. Wired in GraphPane.wireClicks: each node <g> gets a
+   `subtype-<kind>` class after Mermaid render. Mirrors the per-subtype chip
+   palette used in the catalog so the user's "subtype = color" mapping
+   carries across panes. !important is needed because Mermaid sets fill +
+   stroke as inline `style=` attributes, which beat plain class rules. The
+   selection highlight below also uses !important and is more specific
+   (`.node-selected` is added on top of `.subtype-…`), so it still wins. */
+.graph-container .node.subtype-software rect,
+.graph-container .node.subtype-software polygon,
+.graph-container .node.subtype-software circle {
+  fill: rgba(74, 158, 255, 0.18) !important;
+  stroke: var(--accent) !important;
+}
+.graph-container .node.subtype-image rect,
+.graph-container .node.subtype-image polygon,
+.graph-container .node.subtype-image circle {
+  fill: rgba(224, 90, 78, 0.18) !important;
+  stroke: var(--coral) !important;
+}
+.graph-container .node.subtype-container rect,
+.graph-container .node.subtype-container polygon,
+.graph-container .node.subtype-container circle {
+  fill: rgba(46, 196, 182, 0.18) !important;
+  stroke: var(--teal) !important;
+}
+.graph-container .node.subtype-pod rect,
+.graph-container .node.subtype-pod polygon,
+.graph-container .node.subtype-pod circle {
+  fill: rgba(77, 213, 200, 0.18) !important;
+  stroke: #4dd5c8 !important;
+}
+.graph-container .node.subtype-compose rect,
+.graph-container .node.subtype-compose polygon,
+.graph-container .node.subtype-compose circle {
+  fill: rgba(38, 166, 154, 0.20) !important;
+  stroke: #2ed1bf !important;
+}
+
 /* selected-node highlight (current route's software, or both endpoints of the
    current contract). Inline styles from Mermaid require !important. */
 .graph-container .node.node-selected rect,

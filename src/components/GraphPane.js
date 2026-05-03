@@ -286,6 +286,10 @@ export default {
         const part = parts.find((p) => slug(p.name) === m[1]);
         if (!part) continue;
         nodeMap[m[1]] = el;
+        // Subtype class — drives the per-subtype fill/stroke palette in
+        // CSS so each node reads at a glance. Same chip color the catalog
+        // uses; selection highlight (.node-selected, !important) still wins.
+        if (part.subtype) el.classList.add('subtype-' + part.subtype);
         el.style.cursor = 'pointer';
         el.addEventListener('click', (e) => {
           e.stopPropagation();
