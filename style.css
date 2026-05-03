@@ -23,7 +23,13 @@
 html, body {
   margin: 0;
   padding: 0;
-  height: 100%;
+  /* `100vh` (not `100%`) so the chain doesn't depend on a parent height
+     percentage being honored. `overflow: hidden` at the page level forces
+     all descendant containers to actually respect viewport bounds — without
+     it, even with explicit grid/flex sizing, an overflowing inner element
+     could expand the page (mimiron#14). */
+  height: 100vh;
+  overflow: hidden;
   background: var(--bg);
   color: var(--text);
   font-family: var(--sans);
@@ -33,7 +39,18 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
-body { display: flex; flex-direction: column; }
+/* The grid layout for the app shell goes on #app (the Vue mount point),
+   not on body — body just contains #app. Earlier attempts put the grid
+   on body, but #app sits in between body and the header/main panes, so
+   the grid sized #app (correctly) while #app-header and #app-main were
+   left in normal block flow with no constraint, free to grow to content
+   size (mimiron#14). */
+#app {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  height: 100vh;
+  overflow: hidden;
+}
 
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -127,10 +144,30 @@ body { display: flex; flex-direction: column; }
 /* ───── Main layout ───── */
 
 #app-main {
-  flex: 1;
+  /* Sized by body's grid (`auto 1fr` rows). Don't need flex: 1 anymore. */
   display: grid;
   grid-template-columns: 240px minmax(0, 1fr) 380px;
+  /* Explicit row sizing — without this the implicit row defaults to
+     min-content and grows to fit the tallest pane's content (e.g. a long
+     markdown body), which stretched the graph-pane to match and made the
+     whole page scroll (mimiron#14). minmax(0, 1fr) fills the available
+     row height and lets the row shrink below content size so each pane's
+     internal `overflow-y: auto` actually scrolls. */
+  grid-template-rows: minmax(0, 1fr);
+  /* Hard overflow cap so the grid items can't push #app-main past its
+     allocated row size. */
+  overflow: hidden;
   min-height: 0;
+}
+
+/* Grid items inherit min-height: auto by default, which prevents shrinking
+   below their content's size — that's how a long markdown body could
+   stretch its pane and the grid row through the cap above. Force min-height
+   and min-width to 0 on every pane so the grid can size them down to the
+   row/column and the inner overflow-y: auto kicks in. */
+#app-main > .pane {
+  min-height: 0;
+  min-width: 0;
 }
 
 .pane {
@@ -152,9 +189,6 @@ body { display: flex; flex-direction: column; }
     var(--bg);
   border-right: 1px solid var(--border);
   position: relative;
-  /* Isolate the pane's layout from sibling-pane changes so the rendered
-     graph SVG isn't poked by detail-pane content swaps (mimiron#14). */
-  contain: layout;
 }
 
 .detail-pane {
