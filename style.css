@@ -467,7 +467,15 @@ a.template-chip:hover { opacity: 1; background: rgba(155, 114, 232, 0.1); }
 }
 .subtype-chip.subtype-mini { padding: 1px 5px; font-size: 8px; }
 .subtype-chip.subtype-software    { background: rgba(74, 158, 255, 0.10); color: var(--accent); border-color: var(--accent2); }
+.subtype-chip.subtype-image       { background: rgba(224, 90, 78, 0.10);  color: var(--coral);  border-color: rgba(224, 90, 78, 0.4); }
+/* Runtime trio (container/pod/compose) clustered in the teal family per
+   titan-tyr#33 dev guidance — distinguishable but related, since they're
+   all "where does it actually run" subtypes. Container = single runtime,
+   pod = brighter teal (cluster of containers), compose = deeper teal (stack
+   metadata). */
 .subtype-chip.subtype-container   { background: rgba(46, 196, 182, 0.10); color: var(--teal); border-color: rgba(46, 196, 182, 0.4); }
+.subtype-chip.subtype-pod         { background: rgba(77, 213, 200, 0.10); color: #4dd5c8; border-color: rgba(77, 213, 200, 0.45); }
+.subtype-chip.subtype-compose     { background: rgba(38, 166, 154, 0.10); color: #2ed1bf; border-color: rgba(38, 166, 154, 0.55); }
 .subtype-chip.subtype-interaction { background: rgba(155, 114, 232, 0.10); color: var(--purple); border-color: rgba(155, 114, 232, 0.4); }
 .subtype-chip.subtype-binding     { background: rgba(232, 168, 58, 0.10);  color: var(--amber);  border-color: rgba(232, 168, 58, 0.4); }
 .subtype-chip.subtype-connection  { background: rgba(61, 186, 122, 0.10);  color: var(--green);  border-color: rgba(61, 186, 122, 0.4); }

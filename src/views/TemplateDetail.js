@@ -60,7 +60,8 @@ export default {
       <div v-else-if="error && error.status === 404" class="detail-error">
         <div class="detail-error-status">no template named <code>{{ $route.params.kind }}</code></div>
         <div class="detail-error-detail">
-          The current template kinds are <code>software</code>, <code>container</code>,
+          The current template kinds are <code>software</code>, <code>image</code>,
+          <code>container</code>, <code>pod</code>, <code>compose</code>,
           <code>interaction</code>, <code>binding</code>, and <code>connection</code>.
           Legacy stamps (e.g. <code>contract</code> before the v0.10.0 rename to
           <code>interaction</code>) won't resolve — the body that linked here was

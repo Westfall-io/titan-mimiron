@@ -35,7 +35,7 @@ async function pooled(items, fn) {
 }
 
 function isPartKind(kind) {
-  return kind === 'software' || kind === 'container';
+  return api.PART_SUBTYPES.includes(kind);
 }
 
 export default {
