@@ -2,7 +2,7 @@
 
 The WatcherVault Web UI — a **read-only** browser into the WatcherVault catalog of software and contracts. titan-mimiron is intentionally read-only by design (see [DESIGN-MVP.md](./DESIGN-MVP.md) → "Scope: read-only, by design"); software registration and contract proposals happen via the API directly or via the `register-software` Claude skill in this repo.
 
-> **Status:** 0.3.0 — promotes the Mermaid graph from a separate route to the always-mounted center pane in a 3-pane layout (catalog · graph · detail). Selecting a software or contract highlights the matching node(s) in the graph; the detail pane swaps in markdown for the selected entity. Three routes: home (empty detail), software detail (markdown + related contracts), contract detail. Polled health dot in the header. The four-view graph design (Software / DevOps / Interfaces tabs with part subtyping and environment switcher) from [DESIGN.md](./DESIGN.md) stays deferred — it's gated on titan-tyr exposing those concepts.
+> **Status:** 0.4.0 — adds a collapsible version-history panel to software + contract detail views, against the mimiron↔tyr contract `1.2.0` (titan-tyr 0.8.0+). Shows the timeline of accepted versions for the selected resource; lazy-loads on first expand. Built on the 0.3.x 3-pane layout (catalog · always-mounted Mermaid graph · detail) introduced in 0.3.0. Three routes: home (empty detail), software detail (markdown + related contracts + history), contract detail (markdown + history). Polled health dot in the header. The four-view graph design (Software / DevOps / Interfaces tabs with part subtyping and environment switcher) from [DESIGN.md](./DESIGN.md) stays deferred — it's gated on titan-tyr exposing those concepts.
 
 ---
 
@@ -70,7 +70,9 @@ This resolves [#2](https://github.com/Westfall-io/titan-mimiron/issues/2) — ru
 | Catalog (left) | `GET /software?limit=&after=&match=` |
 | Graph (center, always mounted) | `GET /software` + `GET /contracts` (paginated to completion, fetched once on app mount) |
 | Detail (right) — software | `GET /software/{name}` + `GET /software/{name}/contracts` |
+| Detail (right) — software history panel | `GET /software/{name}/history` (lazy on first expand) |
 | Detail (right) — contract | `GET /contracts/{contract_id}` |
+| Detail (right) — contract history panel | `GET /contracts/{contract_id}/history` (lazy on first expand) |
 | Header health dot | `GET /health` (polled every 30s) |
 
 Routing is hash-based: `#/`, `#/software/:name`, `#/contracts/:id`. Only the detail pane swaps on route change — the catalog and graph stay mounted. The graph highlights the route's selection (one node for software, both endpoints for a contract). In the graph: click a node to open the software, click an edge or its version label to open the contract. The header search dims non-matching graph nodes (and edges between non-matches) while the catalog filters server-side; both react to the same input. Search debounces 300ms.

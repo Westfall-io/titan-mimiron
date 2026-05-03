@@ -96,6 +96,13 @@ Per the API team's recommendation, narrowed by the read-only-by-design decision 
 - **Search dimming:** when the header search input is non-empty, non-matching nodes drop to ~20% opacity and edges where neither endpoint matches drop to ~15%. Match rule mirrors the catalog's server-side `?match=` (case-insensitive substring on `name` + `aliases`). Selection always wins over dimming.
 - **Legend:** thin strip at the bottom of the pane with node count, edge count, and a "click a node to inspect" hint.
 
+### 4. Version history panel (added in 0.4.0)
+
+- **Placement:** collapsible section at the bottom of `SoftwareDetail` and `ContractDetail`, below the markdown body (and below the related-contracts list for software).
+- **Data:** `GET /software/{name}/history` and `GET /contracts/{contract_id}/history` — cursor-paginated timelines from titan-tyr 0.8.0+. Each row is `{ version, updated_at }`; no `markdown`, no actor identity (the latter reserved for when real per-caller auth lands and the contract gets a `MAJOR` bump).
+- **Lazy-load:** the panel starts collapsed; the first expand triggers the fetch (per the consumer obligation in mimiron↔tyr contract `1.2.0`). Subsequent expands re-show the cached result. State resets when the route's resource id changes.
+- **Visual:** chevron toggle + "Version history" label + count chip once fetched. Each row is a `version` chip + `updated_at` chip; the most-recent entry gets a green `current` marker. Pre-tyr-0.8 (or any 404), the panel surfaces "version history endpoint not yet available — pending titan-tyr#20" inline rather than treating it as an error.
+
 ---
 
 ## Cross-cutting
@@ -163,7 +170,6 @@ Per the read-only-by-design decision above:
 | Four-view graph tabs (Full / Software / DevOps / Interfaces) | Needs Part subtyping and environments; today's API has only `software` + `contracts`. The single-view graph in 0.2.0 covers the basic case. |
 | Environment switcher | API has no environment concept |
 | Sidebar grouped by Part type | API has only `software` and `contracts` — no Part subtyping |
-| Git history panel | No `/history` endpoint; MVP has `version` + `updated_at` only |
 | File-path browsing | API addresses content by `name` (software) or `id` (contracts), not paths |
 
 ---
