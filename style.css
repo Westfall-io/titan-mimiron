@@ -753,6 +753,20 @@ body { display: flex; flex-direction: column; }
 }
 .graph-container .edge-clickable:hover path { stroke: var(--accent) !important; }
 
+/* Edge labels — explicit text color + background. Mermaid's `theme: 'base'`
+   (chosen in 0.3.0 to match the app palette) doesn't propagate our custom
+   `themeVariables` to edge label text, so without these the labels render
+   dark-on-dark and look blank (mimiron#12). Set on the default state; the
+   `.edge-label-clickable:hover` rule below overrides on hover. */
+.graph-container .edgeLabel,
+.graph-container .edgeLabel foreignObject > div,
+.graph-container .edgeLabel span,
+.graph-container .edgeLabel p {
+  color: var(--text2) !important;
+  background-color: var(--bg2) !important;
+  font-family: var(--mono) !important;
+}
+
 .graph-container .edge-label-clickable { cursor: pointer; }
 .graph-container .edge-label-clickable foreignObject > div,
 .graph-container .edge-label-clickable .edgeLabel {
@@ -761,9 +775,11 @@ body { display: flex; flex-direction: column; }
   transition: color 100ms, background 100ms;
 }
 .graph-container .edge-label-clickable:hover foreignObject > div,
-.graph-container .edge-label-clickable:hover .edgeLabel {
+.graph-container .edge-label-clickable:hover .edgeLabel,
+.graph-container .edge-label-clickable:hover .edgeLabel span,
+.graph-container .edge-label-clickable:hover .edgeLabel p {
   color: var(--accent) !important;
-  background: var(--bg3) !important;
+  background-color: var(--bg3) !important;
 }
 
 .graph-legend {
