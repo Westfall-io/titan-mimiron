@@ -45,40 +45,47 @@ async function request(path, { auth = true, accept = 'application/json' } = {}) 
 
 export const health = () => request('/health', { auth: false });
 
-export const listSoftware = ({ limit = 50, after = null, match = null } = {}) => {
+// Parts (titan-tyr v0.9.0 renamed `software` → `part`; subtype discriminator
+// `software` | `container` added). Listing/detail responses include subtype.
+// Optional `?subtype=` filter narrows to a single subtype.
+export const listParts = ({ limit = 50, after = null, match = null, subtype = null } = {}) => {
   const p = new URLSearchParams({ limit });
   if (after) p.set('after', after);
   if (match) p.set('match', match);
-  return request(`/software?${p}`);
+  if (subtype) p.set('subtype', subtype);
+  return request(`/parts?${p}`);
 };
 
-export const getSoftware = (name) =>
-  request(`/software/${encodeURIComponent(name)}`);
+export const getPart = (name) =>
+  request(`/parts/${encodeURIComponent(name)}`);
 
-export const listSoftwareContracts = (name, { limit = 50, after = null } = {}) => {
+// Wrapper key on response is `part` (was `software` in v1.x). Results array
+// rows carry the contract's own `subtype` (`interaction` | `binding`).
+export const listPartContracts = (name, { limit = 50, after = null } = {}) => {
   const p = new URLSearchParams({ limit });
   if (after) p.set('after', after);
-  return request(`/software/${encodeURIComponent(name)}/contracts?${p}`);
+  return request(`/parts/${encodeURIComponent(name)}/contracts?${p}`);
 };
 
-export const listContracts = ({ limit = 50, after = null } = {}) => {
+export const listPartHistory = (name, { limit = 50, after = null } = {}) => {
   const p = new URLSearchParams({ limit });
   if (after) p.set('after', after);
+  return request(`/parts/${encodeURIComponent(name)}/history?${p}`);
+};
+
+// Contracts (titan-tyr v0.10.0 added subtype: `interaction` | `binding`).
+// Owner/counterparty keys on contract responses are unchanged from v1.x —
+// the field rename to `owner_part`/`counterparty_part` is only on POST input,
+// which mimiron doesn't exercise (read-only MVP).
+export const listContracts = ({ limit = 50, after = null, subtype = null } = {}) => {
+  const p = new URLSearchParams({ limit });
+  if (after) p.set('after', after);
+  if (subtype) p.set('subtype', subtype);
   return request(`/contracts?${p}`);
 };
 
 export const getContract = (id) =>
   request(`/contracts/${encodeURIComponent(id)}`);
-
-// Per-resource version history. Pending titan-tyr#20 — implementation
-// against the `1.2.0-rc1` proposal on contract 94def627-…2439062.
-// Returns the same { results, next } shape as the other listings; each
-// entry is { version, updated_at }. 404 until the API ships the endpoint.
-export const listSoftwareHistory = (name, { limit = 50, after = null } = {}) => {
-  const p = new URLSearchParams({ limit });
-  if (after) p.set('after', after);
-  return request(`/software/${encodeURIComponent(name)}/history?${p}`);
-};
 
 export const listContractHistory = (id, { limit = 50, after = null } = {}) => {
   const p = new URLSearchParams({ limit });

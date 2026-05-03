@@ -1,8 +1,8 @@
 # titan-mimiron
 
-The WatcherVault Web UI — a **read-only** browser into the WatcherVault catalog of software and contracts. titan-mimiron is intentionally read-only by design (see [DESIGN-MVP.md](./DESIGN-MVP.md) → "Scope: read-only, by design"); software registration and contract proposals happen via the API directly or via the `register-software` Claude skill in this repo.
+The WatcherVault Web UI — a **read-only** browser into the WatcherVault catalog of parts and contracts. titan-mimiron is intentionally read-only by design (see [DESIGN-MVP.md](./DESIGN-MVP.md) → "Scope: read-only, by design"); part registration and contract proposals happen via the API directly or via the `register-software` Claude skill in this repo.
 
-> **Status:** 0.4.0 — adds a collapsible version-history panel to software + contract detail views, against the mimiron↔tyr contract `1.2.0` (titan-tyr 0.8.0+). Shows the timeline of accepted versions for the selected resource; lazy-loads on first expand. Built on the 0.3.x 3-pane layout (catalog · always-mounted Mermaid graph · detail) introduced in 0.3.0. Three routes: home (empty detail), software detail (markdown + related contracts + history), contract detail (markdown + history). Polled health dot in the header. The four-view graph design (Software / DevOps / Interfaces tabs with part subtyping and environment switcher) from [DESIGN.md](./DESIGN.md) stays deferred — it's gated on titan-tyr exposing those concepts.
+> **Status:** 0.6.0 — adopts titan-tyr v0.10.0's renamed surface (`software` → `part`) and its subtype discriminator. Parts now carry `subtype: software | container` and contracts carry `subtype: interaction | binding`; both are surfaced as small chips in the catalog row, detail topbar, and per-contract listings. Routes move from `/software/:name` to `/parts/:name`; in-app markdown link interception updated in lockstep. Built on the 0.5.x resizable-detail-pane layout (catalog · always-mounted Mermaid graph · resizable detail) and the 0.3.x 3-pane layout. The four-view graph design (Software / DevOps / Interfaces tabs with full part-subtype rendering and environment switcher) from [DESIGN.md](./DESIGN.md) stays deferred — only the chip surface ships in 0.6.0; richer subtype-aware rendering remains gated on further titan-tyr concepts.
 
 ---
 
@@ -67,17 +67,17 @@ This resolves [#2](https://github.com/Westfall-io/titan-mimiron/issues/2) — ru
 
 | Pane / element | Endpoints used |
 |---|---|
-| Catalog (left) | `GET /software?limit=&after=&match=` |
-| Graph (center, always mounted) | `GET /software` + `GET /contracts` (paginated to completion, fetched once on app mount) |
-| Detail (right) — software | `GET /software/{name}` + `GET /software/{name}/contracts` |
-| Detail (right) — software history panel | `GET /software/{name}/history` (lazy on first expand) |
+| Catalog (left) | `GET /parts?limit=&after=&match=` (optional `&subtype=`) |
+| Graph (center, always mounted) | `GET /parts` + `GET /contracts` (paginated to completion, fetched once on app mount) |
+| Detail (right) — part | `GET /parts/{name}` + `GET /parts/{name}/contracts` |
+| Detail (right) — part history panel | `GET /parts/{name}/history` (lazy on first expand) |
 | Detail (right) — contract | `GET /contracts/{contract_id}` |
 | Detail (right) — contract history panel | `GET /contracts/{contract_id}/history` (lazy on first expand) |
 | Header health dot | `GET /health` (polled every 30s) |
 
-Routing is hash-based: `#/`, `#/software/:name`, `#/contracts/:id`. Only the detail pane swaps on route change — the catalog and graph stay mounted. The graph highlights the route's selection (one node for software, both endpoints for a contract). In the graph: click a node to open the software, click an edge or its version label to open the contract. The header search dims non-matching graph nodes (and edges between non-matches) while the catalog filters server-side; both react to the same input. Search debounces 300ms.
+Routing is hash-based: `#/`, `#/parts/:name`, `#/contracts/:id`. Only the detail pane swaps on route change — the catalog and graph stay mounted. The graph highlights the route's selection (one node for a part, both endpoints for a contract). In the graph: click a node to open the part, click an edge or its version label to open the contract. The header search dims non-matching graph nodes (and edges between non-matches) while the catalog filters server-side; both react to the same input. Search debounces 300ms.
 
-Markdown links inside contract/software bodies are intercepted: a slug-shaped href (`titan-tyr`) routes to `/software/titan-tyr`, a UUID routes to `/contracts/<uuid>`, external (`http://…`) opens in a new tab with a ↗ glyph, anything else is marked broken. See [DESIGN-MVP.md → Markdown rendering](./DESIGN-MVP.md#markdown-rendering).
+Markdown links inside contract/part bodies are intercepted: a slug-shaped href (`titan-tyr`) routes to `/parts/titan-tyr`, a UUID routes to `/contracts/<uuid>`, external (`http://…`) opens in a new tab with a ↗ glyph, anything else is marked broken. See [DESIGN-MVP.md → Markdown rendering](./DESIGN-MVP.md#markdown-rendering).
 
 ## Tech stack
 
@@ -102,7 +102,7 @@ titan-tyr (REST API)
 titan-mimiron (this repo — Web UI)
 ```
 
-titan-mimiron talks **only** to titan-tyr. The mimiron ↔ tyr contract is registered in titan-tyr (see `GET /software/titan-mimiron/contracts`).
+titan-mimiron talks **only** to titan-tyr. The mimiron ↔ tyr contract is registered in titan-tyr (see `GET /parts/titan-mimiron/contracts`).
 
 ## Repository layout
 
@@ -136,7 +136,7 @@ titan-mimiron/
     │   └── GraphPane.js     Always-mounted Mermaid graph (center pane) + legend strip
     └── views/               Detail-pane views, swapped by router-view
         ├── EmptyDetail.js
-        ├── SoftwareDetail.js
+        ├── PartDetail.js
         └── ContractDetail.js
 ```
 
@@ -144,7 +144,7 @@ titan-mimiron/
 
 Tracked in [DESIGN-MVP.md → What's deferred](./DESIGN-MVP.md#whats-deferred): Mermaid graph, environment switcher, sidebar grouped by Part type, git history panel, file-path browsing, contract registration UI, proposal/accept flows, template management UI.
 
-Software registration via `POST /software` is implemented as a Claude Code skill (`.claude/skills/register-software/`), not a UI form. Run it from Claude Code to add new software nodes.
+Part registration via `POST /parts` is implemented as a Claude Code skill (`.claude/skills/register-software/`), not a UI form. Run it from Claude Code to add new part nodes.
 
 ## Contributing
 

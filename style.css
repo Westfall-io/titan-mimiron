@@ -406,9 +406,29 @@ body.is-resizing * { cursor: col-resize !important; user-select: none !important
   border-radius: 2px;
 }
 
-.type-badge.type-software { background: rgba(74, 158, 255, 0.15); color: var(--accent); }
+.type-badge.type-part     { background: rgba(74, 158, 255, 0.15); color: var(--accent); }
 .type-badge.type-contract { background: rgba(155, 114, 232, 0.15); color: var(--purple); }
 .type-badge.type-graph    { background: rgba(46, 196, 182, 0.15); color: var(--teal); }
+
+/* Subtype chip: smaller than type-badge; rendered next to part/contract
+   type badges and in catalog/contract rows. Two part subtypes
+   (software | container) and two contract subtypes (interaction | binding). */
+.subtype-chip {
+  display: inline-block;
+  padding: 2px 6px;
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 500;
+  text-transform: lowercase;
+  letter-spacing: 0.05em;
+  border-radius: 2px;
+  border: 1px solid transparent;
+}
+.subtype-chip.subtype-mini { padding: 1px 5px; font-size: 8px; }
+.subtype-chip.subtype-software    { background: rgba(74, 158, 255, 0.10); color: var(--accent); border-color: var(--accent2); }
+.subtype-chip.subtype-container   { background: rgba(46, 196, 182, 0.10); color: var(--teal); border-color: rgba(46, 196, 182, 0.4); }
+.subtype-chip.subtype-interaction { background: rgba(155, 114, 232, 0.10); color: var(--purple); border-color: rgba(155, 114, 232, 0.4); }
+.subtype-chip.subtype-binding     { background: rgba(232, 168, 58, 0.10);  color: var(--amber);  border-color: rgba(232, 168, 58, 0.4); }
 
 .topbar-name {
   font-family: var(--mono);

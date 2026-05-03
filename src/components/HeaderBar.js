@@ -27,7 +27,7 @@ export default {
         v-model="search"
         id="search"
         type="search"
-        placeholder="Search software…"
+        placeholder="Search parts…"
         autocomplete="off"
         spellcheck="false"
       />

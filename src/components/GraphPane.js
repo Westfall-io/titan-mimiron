@@ -4,14 +4,14 @@ import mermaid from 'mermaid';
 import * as api from '../api.js';
 import { retryNonce, search } from '../store.js';
 
-// Mermaid IDs must be alphanumeric/underscore. Software names are slug-shaped
+// Mermaid IDs must be alphanumeric/underscore. Part names are slug-shaped
 // — replace hyphens with underscores and prefix to guarantee an alpha leading char.
-const slug = (name) => 's_' + name.replace(/-/g, '_');
+const slug = (name) => 'p_' + name.replace(/-/g, '_');
 
-function buildSource(software, contracts) {
+function buildSource(parts, contracts) {
   const lines = ['graph LR'];
-  for (const sw of software) {
-    lines.push(`  ${slug(sw.name)}["${sw.name}"]`);
+  for (const p of parts) {
+    lines.push(`  ${slug(p.name)}["${p.name}"]`);
   }
   for (const c of contracts) {
     lines.push(
@@ -27,13 +27,13 @@ export default {
     const route = useRoute();
     const status = ref('loading');
     const error = ref(null);
-    const counts = ref({ software: 0, contracts: 0 });
+    const counts = ref({ parts: 0, contracts: 0 });
     const containerRef = ref(null);
     let nodeMap = {};
-    // Software + contracts + edge-element refs survive past render() so the
+    // Parts + contracts + edge-element refs survive past render() so the
     // search-dimming watcher can recompute against fresh data without a
     // graph re-render.
-    let softwareList = [];
+    let partList = [];
     let contractList = [];
     let edgePathEls = [];
     let edgeLabelEls = [];
@@ -59,7 +59,7 @@ export default {
     );
 
     const selected = computed(() => {
-      if (route.name === 'software') return [slug(route.params.name)];
+      if (route.name === 'part') return [slug(route.params.name)];
       if (route.name === 'contract') return contractEndpoints.value;
       return [];
     });
@@ -85,9 +85,9 @@ export default {
         return;
       }
       const matchingSlugs = new Set();
-      for (const sw of softwareList) {
-        const hay = [sw.name, ...(sw.aliases || [])].map((s) => s.toLowerCase());
-        if (hay.some((h) => h.includes(q))) matchingSlugs.add(slug(sw.name));
+      for (const p of partList) {
+        const hay = [p.name, ...(p.aliases || [])].map((s) => s.toLowerCase());
+        if (hay.some((h) => h.includes(q))) matchingSlugs.add(slug(p.name));
       }
       for (const [s, el] of Object.entries(nodeMap)) {
         el.classList.toggle('node-dim', !matchingSlugs.has(s));
@@ -106,7 +106,7 @@ export default {
     // Mermaid's `click ID call fn()` DSL because it relies on a global window
     // function and is fragile across Mermaid versions; direct DOM listeners
     // also let us make edges clickable (Mermaid has no edge-click DSL).
-    function wireClicks(software, contracts) {
+    function wireClicks(parts, contracts) {
       const root = containerRef.value;
       if (!root) return;
 
@@ -114,14 +114,14 @@ export default {
       // Build slug→element map for both selection and click wiring.
       nodeMap = {};
       for (const el of root.querySelectorAll('.node')) {
-        const m = el.id.match(/-(s_[a-z0-9_]+)-\d+$/);
+        const m = el.id.match(/-(p_[a-z0-9_]+)-\d+$/);
         if (!m) continue;
-        const sw = software.find((s) => slug(s.name) === m[1]);
-        if (!sw) continue;
+        const part = parts.find((p) => slug(p.name) === m[1]);
+        if (!part) continue;
         nodeMap[m[1]] = el;
         el.style.cursor = 'pointer';
         el.addEventListener('click', () => {
-          router.push(`/software/${encodeURIComponent(sw.name)}`);
+          router.push(`/parts/${encodeURIComponent(part.name)}`);
         });
       }
 
@@ -151,13 +151,13 @@ export default {
       status.value = 'loading';
       error.value = null;
       try {
-        const [software, contracts] = await Promise.all([
-          api.fetchAll(api.listSoftware),
+        const [parts, contracts] = await Promise.all([
+          api.fetchAll(api.listParts),
           api.fetchAll(api.listContracts),
         ]);
-        counts.value = { software: software.length, contracts: contracts.length };
+        counts.value = { parts: parts.length, contracts: contracts.length };
 
-        if (software.length === 0) {
+        if (parts.length === 0) {
           status.value = 'empty';
           return;
         }
@@ -194,13 +194,13 @@ export default {
           },
         });
 
-        const source = buildSource(software, contracts);
+        const source = buildSource(parts, contracts);
         const { svg } = await mermaid.render('mimiron-graph', source);
         containerRef.value.innerHTML = svg;
 
-        softwareList = software;
+        partList = parts;
         contractList = contracts;
-        wireClicks(software, contracts);
+        wireClicks(parts, contracts);
         applySelection();
         applyDimming();
 
@@ -220,7 +220,7 @@ export default {
     <section class="pane graph-pane" aria-label="architecture graph">
       <div class="graph-stage">
         <div v-if="status === 'loading'" class="graph-loading">loading graph…</div>
-        <div v-else-if="status === 'empty'" class="graph-empty">no software registered</div>
+        <div v-else-if="status === 'empty'" class="graph-empty">no parts registered</div>
         <div v-else-if="status === 'error'" class="graph-error">
           <div class="graph-error-status">graph load failed</div>
           <div class="graph-error-detail">{{ error.detail || error.message }}</div>
@@ -228,7 +228,7 @@ export default {
         <div ref="containerRef" v-show="status === 'ready'" class="graph-container"></div>
       </div>
       <div class="graph-legend">
-        <span class="legend-item"><span class="legend-swatch swatch-node"></span>{{ counts.software }} software</span>
+        <span class="legend-item"><span class="legend-swatch swatch-node"></span>{{ counts.parts }} parts</span>
         <span class="legend-item"><span class="legend-swatch swatch-edge"></span>{{ counts.contracts }} contracts</span>
         <span class="legend-spacer"></span>
         <span class="legend-hint">click a node or edge label to inspect</span>
