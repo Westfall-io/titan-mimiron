@@ -68,7 +68,7 @@ export default {
           </div>
           <div class="topbar-row chips">
             <span class="version-chip">v{{ part.version }}</span>
-            <span v-if="stamp.version" class="template-chip" title="Template version">tpl {{ stamp.kind }}@{{ stamp.version }}</span>
+            <router-link v-if="stamp.version" :to="'/templates/' + stamp.kind" class="template-chip" title="View template">tpl {{ stamp.kind }}@{{ stamp.version }}</router-link>
             <span class="updated-chip" :title="part.updated_at">{{ relativeTime(part.updated_at) }}</span>
           </div>
           <div class="topbar-row links">

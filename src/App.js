@@ -1,12 +1,23 @@
-import { onMounted, onUnmounted } from 'vue';
+import { computed, onMounted, onUnmounted } from 'vue';
+import { useRoute } from 'vue-router';
 import HeaderBar from './components/HeaderBar.js';
 import CatalogPane from './components/CatalogPane.js';
 import GraphPane from './components/GraphPane.js';
+import TemplatesIndex from './components/TemplatesIndex.js';
 import { fatal, retry } from './store.js';
 
+// Two top-level layouts:
+//   • parts/contracts (home, part, contract) — the existing 3-pane shell
+//     (catalog · graph · resize handle · detail) with --detail-width.
+//   • templates (templates, template) — a 2-pane shell (templates index ·
+//     template detail). No graph (no edges to render), no resize handle
+//     (only two text panes; the slider was useful when graph was the
+//     center of mass).
+//
 // Detail-pane width is a CSS variable so the resize handle can update it
 // without re-rendering Vue components. Persisted to localStorage so the
 // user's adjustment survives page loads. Clamped to [MIN, 50% of window].
+// The variable is only consumed by the parts/contracts layout.
 const STORAGE_KEY = 'mimiron-detail-width';
 const MIN_WIDTH = 280;
 const maxWidth = () => Math.floor(window.innerWidth * 0.5);
@@ -22,8 +33,13 @@ function loadInitialWidth() {
 }
 
 export default {
-  components: { HeaderBar, CatalogPane, GraphPane },
+  components: { HeaderBar, CatalogPane, GraphPane, TemplatesIndex },
   setup() {
+    const route = useRoute();
+    const isTemplatesLayout = computed(() =>
+      route.name === 'templates' || route.name === 'template'
+    );
+
     let dragState = null;
 
     function onPointerDown(e) {
@@ -78,11 +94,17 @@ export default {
       window.removeEventListener('resize', onWindowResize);
     });
 
-    return { fatal, retry, onPointerDown, onPointerMove, onPointerUp };
+    return { fatal, retry, isTemplatesLayout, onPointerDown, onPointerMove, onPointerUp };
   },
   template: /* html */ `
     <header-bar />
-    <main id="app-main">
+    <main v-if="isTemplatesLayout" id="templates-main">
+      <templates-index />
+      <section class="pane detail-pane" aria-label="detail">
+        <router-view />
+      </section>
+    </main>
+    <main v-else id="app-main">
       <catalog-pane />
       <graph-pane />
       <div

@@ -115,6 +115,8 @@ html, body {
 .header-link:hover { color: var(--text); border-color: var(--border2); }
 .header-link.active { color: var(--accent); border-color: var(--accent); }
 
+.header-nav { display: flex; gap: 4px; }
+
 .header-meta {
   margin-left: auto;
   display: flex;
@@ -173,6 +175,23 @@ html, body {
 #app-main > .pane {
   min-height: 0;
   min-width: 0;
+}
+
+/* Templates layout — a 2-column grid (index · detail). No graph (no edges
+   to render), no resize handle (the slider was useful when graph was the
+   center of mass; here it'd just shuffle two text panes around). The
+   index pane is fixed-width like the catalog; the detail takes the rest. */
+#templates-main {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  overflow: hidden;
+  min-height: 0;
+}
+#templates-main > .pane { min-height: 0; min-width: 0; }
+.templates-index {
+  background: var(--bg2);
+  border-right: 1px solid var(--border);
 }
 
 .pane {
@@ -302,7 +321,28 @@ body.is-resizing * { cursor: col-resize !important; user-select: none !important
 
 .version-chip { color: var(--accent); border-color: var(--accent2); }
 .alias-chip { color: var(--text3); }
-.template-chip { color: var(--purple); border-color: var(--purple); opacity: 0.7; }
+.template-chip { color: var(--purple); border-color: var(--purple); opacity: 0.7; text-decoration: none; }
+a.template-chip:hover { opacity: 1; background: rgba(155, 114, 232, 0.1); }
+
+.proposal-chip {
+  display: inline-block;
+  padding: 1px 6px;
+  font-family: var(--mono);
+  font-size: 9px;
+  border-radius: 2px;
+  border: 1px solid var(--amber);
+  color: var(--amber);
+  background: rgba(232, 168, 58, 0.08);
+  white-space: nowrap;
+  vertical-align: middle;
+  text-transform: lowercase;
+}
+
+.catalog-error-inline {
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--coral);
+}
 .updated-chip { color: var(--text3); border-color: transparent; background: transparent; padding-left: 0; }
 
 .direction-chip { font-weight: 500; text-transform: uppercase; }
@@ -409,6 +449,7 @@ body.is-resizing * { cursor: col-resize !important; user-select: none !important
 .type-badge.type-part     { background: rgba(74, 158, 255, 0.15); color: var(--accent); }
 .type-badge.type-contract { background: rgba(155, 114, 232, 0.15); color: var(--purple); }
 .type-badge.type-graph    { background: rgba(46, 196, 182, 0.15); color: var(--teal); }
+.type-badge.type-template { background: rgba(232, 168, 58, 0.15); color: var(--amber); }
 
 /* Subtype chip: smaller than type-badge; rendered next to part/contract
    type badges and in catalog/contract rows. Two part subtypes

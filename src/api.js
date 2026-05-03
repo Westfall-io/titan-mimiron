@@ -93,6 +93,19 @@ export const listContractHistory = (id, { limit = 50, after = null } = {}) => {
   return request(`/contracts/${encodeURIComponent(id)}/history?${p}`);
 };
 
+// Templates. The four kinds today: software, container, interaction, binding.
+// `GET /templates/{kind}` returns the active body as raw markdown (text/markdown).
+// `GET /templates/{kind}/proposals` returns `{kind, active_version, proposals: []}`
+// — there is no per-version history endpoint; "history" surfaces in mimiron as
+// active_version + the pending RC proposals.
+export const TEMPLATE_KINDS = ['software', 'container', 'interaction', 'binding'];
+
+export const getTemplate = (kind) =>
+  request(`/templates/${encodeURIComponent(kind)}`, { accept: 'text/markdown' });
+
+export const getTemplateProposals = (kind) =>
+  request(`/templates/${encodeURIComponent(kind)}/proposals`);
+
 // Walk a paginated endpoint to completion. Used by the graph view, where we
 // genuinely need every node + edge in one bag.
 export async function fetchAll(listFn, opts = {}) {

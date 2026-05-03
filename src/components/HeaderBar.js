@@ -1,8 +1,15 @@
 import { computed } from 'vue';
+import { useRoute } from 'vue-router';
 import { search, health } from '../store.js';
 
 export default {
   setup() {
+    const route = useRoute();
+    const isTemplatesRoute = computed(() =>
+      route.name === 'templates' || route.name === 'template'
+    );
+    const isPartsRoute = computed(() => !isTemplatesRoute.value);
+
     const dotClass = computed(() => {
       const h = health.value;
       if (h.status === 'unknown') return 'health-unknown';
@@ -18,12 +25,17 @@ export default {
       return `API ${h.version} · status ${h.status} · db ${h.db}`;
     });
 
-    return { search, health, dotClass, dotTitle };
+    return { search, health, dotClass, dotTitle, isTemplatesRoute, isPartsRoute };
   },
   template: /* html */ `
     <header id="app-header">
       <div class="wordmark">WatcherVault</div>
+      <nav class="header-nav" aria-label="primary">
+        <router-link to="/" class="header-link" :class="{ active: isPartsRoute }">Parts</router-link>
+        <router-link to="/templates" class="header-link" :class="{ active: isTemplatesRoute }">Templates</router-link>
+      </nav>
       <input
+        v-if="!isTemplatesRoute"
         v-model="search"
         id="search"
         type="search"
