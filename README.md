@@ -2,7 +2,7 @@
 
 The WatcherVault Web UI — a **read-only** browser into the WatcherVault catalog of parts and contracts. titan-mimiron is intentionally read-only by design (see [DESIGN-MVP.md](./DESIGN-MVP.md) → "Scope: read-only, by design"); part registration and contract proposals happen via the API directly or via the `register-software` Claude skill in this repo.
 
-> **Status:** 0.14.0 — graph nodes now color-coded by part subtype (closes #37). Each node `<g>` gets a `subtype-{kind}` class after Mermaid render, driving fill+stroke from the same per-subtype palette used in the catalog and detail topbars (software=blue, image=coral, container=teal, pod=brighter teal, compose=deeper teal). The user's "subtype = color" mapping now carries across all three panes. Selection highlight (`.node-selected`) and dim/focus-hide compose cleanly on top — no regression. Edges are still uniform; coloring edges by contract subtype is a sensible follow-up if it becomes useful. Builds on 0.13.0 (graph view tabs).
+> **Status:** 0.14.0 — graph nodes now color-coded by part subtype (closes #37). Each node `<g>` gets a `subtype-{kind}` class after Mermaid render, driving fill+stroke from the per-subtype palette used everywhere in the UI: software=blue, image=coral, container=teal, pod=amber, compose=green; all contract subtypes share purple (text label conveys which kind). The user's "subtype = color" mapping now carries across all three panes. Selection highlight bumped for visibility against same-color subtype tints (off-white stroke + layered drop-shadow). Edges still uniform; coloring edges by contract subtype is a follow-up if useful. Builds on 0.13.0 (graph view tabs).
 
 ---
 
