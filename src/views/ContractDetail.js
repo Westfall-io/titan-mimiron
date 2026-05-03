@@ -48,6 +48,7 @@ export default {
         <div class="detail-topbar">
           <div class="topbar-row">
             <span class="type-badge type-contract">contract</span>
+            <span v-if="contract.subtype" class="subtype-chip" :class="'subtype-' + contract.subtype">{{ contract.subtype }}</span>
             <span class="topbar-name">{{ contract.owner }} → {{ contract.counterparty }}</span>
           </div>
           <div class="topbar-row chips">
@@ -56,8 +57,8 @@ export default {
             <span class="updated-chip" :title="contract.updated_at">{{ relativeTime(contract.updated_at) }}</span>
           </div>
           <div class="topbar-row links">
-            <router-link :to="'/software/' + encodeURIComponent(contract.owner)" class="link-pill">owner: {{ contract.owner }}</router-link>
-            <router-link :to="'/software/' + encodeURIComponent(contract.counterparty)" class="link-pill">counterparty: {{ contract.counterparty }}</router-link>
+            <router-link :to="'/parts/' + encodeURIComponent(contract.owner)" class="link-pill">owner: {{ contract.owner }}</router-link>
+            <router-link :to="'/parts/' + encodeURIComponent(contract.counterparty)" class="link-pill">counterparty: {{ contract.counterparty }}</router-link>
           </div>
         </div>
         <div class="detail-body markdown-body" v-html="renderedBody"></div>

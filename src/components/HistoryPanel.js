@@ -3,7 +3,7 @@ import * as api from '../api.js';
 import { relativeTime } from '../util.js';
 
 // Collapsible "Version history" panel, mounted below the markdown body in
-// SoftwareDetail and ContractDetail. Lazy-loads on first expand (per the
+// PartDetail and ContractDetail. Lazy-loads on first expand (per the
 // consumer obligation in mimiron↔tyr contract `1.2.0-rc1`).
 //
 // Pending titan-tyr#20 — until that ships, the API returns 404 and we
@@ -11,7 +11,7 @@ import { relativeTime } from '../util.js';
 // than treating it as a real error.
 export default {
   props: {
-    kind: { type: String, required: true, validator: (v) => v === 'software' || v === 'contract' },
+    kind: { type: String, required: true, validator: (v) => v === 'part' || v === 'contract' },
     id: { type: String, required: true },
   },
   setup(props) {
@@ -25,7 +25,7 @@ export default {
       loading.value = true;
       error.value = null;
       try {
-        const fn = props.kind === 'software' ? api.listSoftwareHistory : api.listContractHistory;
+        const fn = props.kind === 'part' ? api.listPartHistory : api.listContractHistory;
         const data = await fn(props.id);
         entries.value = data.results || [];
         fetched.value = true;

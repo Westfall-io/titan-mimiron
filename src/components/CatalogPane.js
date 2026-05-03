@@ -14,7 +14,7 @@ export default {
     let debounceTimer = null;
 
     const activeName = computed(() =>
-      route.name === 'software' ? route.params.name : null
+      route.name === 'part' ? route.params.name : null
     );
 
     async function load(reset = true) {
@@ -25,7 +25,7 @@ export default {
       loading.value = true;
       error.value = null;
       try {
-        const data = await api.listSoftware({
+        const data = await api.listParts({
           match: search.value || null,
           after: reset ? null : next.value,
         });
@@ -54,23 +54,26 @@ export default {
     return { results, next, loading, error, activeName, search, loadMore };
   },
   template: /* html */ `
-    <section class="pane catalog-pane" aria-label="software catalog">
+    <section class="pane catalog-pane" aria-label="parts catalog">
       <div class="catalog-list">
         <div v-if="error" class="catalog-error">{{ error.detail || error.message }}</div>
         <div v-else-if="!loading && results.length === 0" class="catalog-empty">
-          {{ search ? 'no matches' : 'no software registered' }}
+          {{ search ? 'no matches' : 'no parts registered' }}
         </div>
         <router-link
-          v-for="sw in results"
-          :key="sw.id"
-          :to="'/software/' + encodeURIComponent(sw.name)"
+          v-for="p in results"
+          :key="p.id"
+          :to="'/parts/' + encodeURIComponent(p.name)"
           class="catalog-row"
-          :class="{ active: sw.name === activeName }"
+          :class="{ active: p.name === activeName }"
         >
-          <div class="row-name">{{ sw.name }}</div>
+          <div class="row-name">
+            <span v-if="p.subtype" class="subtype-chip subtype-mini" :class="'subtype-' + p.subtype">{{ p.subtype }}</span>
+            {{ p.name }}
+          </div>
           <div class="row-meta">
-            <span class="version-chip">v{{ sw.version }}</span>
-            <span v-for="a in sw.aliases" :key="a" class="alias-chip">{{ a }}</span>
+            <span class="version-chip">v{{ p.version }}</span>
+            <span v-for="a in p.aliases" :key="a" class="alias-chip">{{ a }}</span>
           </div>
         </router-link>
       </div>

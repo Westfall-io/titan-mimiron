@@ -28,7 +28,7 @@ export function repoLink(uri) {
   return uri.replace(/\.git$/, '');
 }
 
-export function trackerLink(software) {
-  if (software.issue_tracker_uri) return software.issue_tracker_uri;
-  return `${repoLink(software.repo_uri)}/issues`;
+export function trackerLink(part) {
+  if (part.issue_tracker_uri) return part.issue_tracker_uri;
+  return `${repoLink(part.repo_uri)}/issues`;
 }

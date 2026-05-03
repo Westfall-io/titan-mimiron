@@ -10,13 +10,13 @@ export default {
   props: { name: { type: String, required: true } },
   setup(props) {
     const route = useRoute();
-    const sw = ref(null);
+    const part = ref(null);
     const contracts = ref([]);
     const loading = ref(false);
     const error = ref(null);
 
     const stamp = computed(() =>
-      sw.value ? extractStamp(sw.value.markdown) : { kind: null, version: null, body: '' }
+      part.value ? extractStamp(part.value.markdown) : { kind: null, version: null, body: '' }
     );
     const renderedBody = computed(() =>
       stamp.value.body ? renderMarkdown(stamp.value.body) : ''
@@ -25,14 +25,14 @@ export default {
     async function load(name) {
       loading.value = true;
       error.value = null;
-      sw.value = null;
+      part.value = null;
       contracts.value = [];
       try {
-        const [s, c] = await Promise.all([
-          api.getSoftware(name),
-          api.listSoftwareContracts(name),
+        const [p, c] = await Promise.all([
+          api.getPart(name),
+          api.listPartContracts(name),
         ]);
-        sw.value = s;
+        part.value = p;
         contracts.value = c.results;
       } catch (e) {
         error.value = e;
@@ -48,34 +48,35 @@ export default {
     function other(c) { return c.owner === route.params.name ? c.counterparty : c.owner; }
 
     return {
-      sw, contracts, loading, error, stamp, renderedBody,
+      part, contracts, loading, error, stamp, renderedBody,
       relativeTime, repoLink, trackerLink, direction, other,
     };
   },
   template: /* html */ `
     <div class="detail-content">
-      <div v-if="loading && !sw" class="detail-loading">Loading…</div>
+      <div v-if="loading && !part" class="detail-loading">Loading…</div>
       <div v-else-if="error" class="detail-error">
         <div class="detail-error-status">HTTP {{ error.status || '?' }}</div>
         <div class="detail-error-detail">{{ error.detail || error.message }}</div>
       </div>
-      <template v-else-if="sw">
+      <template v-else-if="part">
         <div class="detail-topbar">
           <div class="topbar-row">
-            <span class="type-badge type-software">software</span>
-            <span class="topbar-name">{{ sw.name }}</span>
+            <span class="type-badge type-part">part</span>
+            <span class="subtype-chip" :class="'subtype-' + part.subtype">{{ part.subtype }}</span>
+            <span class="topbar-name">{{ part.name }}</span>
           </div>
           <div class="topbar-row chips">
-            <span class="version-chip">v{{ sw.version }}</span>
+            <span class="version-chip">v{{ part.version }}</span>
             <span v-if="stamp.version" class="template-chip" title="Template version">tpl {{ stamp.kind }}@{{ stamp.version }}</span>
-            <span class="updated-chip" :title="sw.updated_at">{{ relativeTime(sw.updated_at) }}</span>
+            <span class="updated-chip" :title="part.updated_at">{{ relativeTime(part.updated_at) }}</span>
           </div>
           <div class="topbar-row links">
-            <a :href="repoLink(sw.repo_uri)" target="_blank" rel="noopener" class="link-pill">repo</a>
-            <a :href="trackerLink(sw)" target="_blank" rel="noopener" class="link-pill">issues</a>
-            <span v-if="sw.aliases.length" class="alias-group">
+            <a :href="repoLink(part.repo_uri)" target="_blank" rel="noopener" class="link-pill">repo</a>
+            <a :href="trackerLink(part)" target="_blank" rel="noopener" class="link-pill">issues</a>
+            <span v-if="part.aliases.length" class="alias-group">
               aliases:
-              <span v-for="a in sw.aliases" :key="a" class="alias-chip">{{ a }}</span>
+              <span v-for="a in part.aliases" :key="a" class="alias-chip">{{ a }}</span>
             </span>
           </div>
         </div>
@@ -93,12 +94,13 @@ export default {
               class="contract-row"
             >
               <span class="direction-chip" :class="'dir-' + direction(c)">{{ direction(c) }}</span>
+              <span v-if="c.subtype" class="subtype-chip subtype-mini" :class="'subtype-' + c.subtype">{{ c.subtype }}</span>
               <span class="contract-other">{{ other(c) }}</span>
               <span class="contract-meta">v{{ c.version }} · {{ relativeTime(c.updated_at) }}</span>
             </router-link>
           </div>
         </div>
-        <history-panel kind="software" :id="sw.name" />
+        <history-panel kind="part" :id="part.name" />
       </template>
     </div>
   `,
