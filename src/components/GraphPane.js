@@ -21,6 +21,60 @@ function buildSource(parts, contracts) {
   return lines.join('\n');
 }
 
+// View tabs. The original DESIGN.md spec called for four (Full / Software /
+// DevOps / Interfaces); we collapsed Interfaces into a use-case the graph
+// focus filter (#29) already covers (click an edge → see only that contract
+// + endpoints). The remaining three split by lifecycle stage: All sees
+// everything, Software is the application architecture (software parts +
+// interaction contracts), DevOps is the deployment chain (build/runtime
+// part subtypes + binding/connection contracts).
+const VIEWS = [
+  { id: 'all', label: 'All' },
+  { id: 'software', label: 'Software' },
+  { id: 'devops', label: 'DevOps' },
+];
+
+const VIEW_FILTERS = {
+  software: { parts: new Set(['software']), contracts: new Set(['interaction']) },
+  devops: {
+    parts: new Set(['container', 'image', 'pod', 'compose']),
+    contracts: new Set(['binding', 'connection']),
+  },
+};
+
+// Filter the catalog for the current view. Edge-driven: keep contracts whose
+// subtype is in the view's contract set, then keep any part whose subtype is
+// in the view's part set OR is an endpoint of a kept contract. The endpoint
+// rule lets cross-stage edges render — e.g., a binding (container → software)
+// shows the software node even though "software" isn't in the DevOps part
+// set, so the deployment chain stays connected.
+function filterForView(view, allParts, allContracts) {
+  if (view === 'all') return { parts: allParts, contracts: allContracts };
+  const f = VIEW_FILTERS[view];
+  if (!f) return { parts: allParts, contracts: allContracts };
+  const contracts = allContracts.filter((c) => f.contracts.has(c.subtype));
+  const endpoints = new Set();
+  for (const c of contracts) {
+    endpoints.add(c.owner);
+    endpoints.add(c.counterparty);
+  }
+  const parts = allParts.filter((p) => f.parts.has(p.subtype) || endpoints.has(p.name));
+  return { parts, contracts };
+}
+
+const VIEW_LS_KEY = 'mimiron.graph.view';
+function loadView() {
+  try {
+    const v = localStorage.getItem(VIEW_LS_KEY);
+    return VIEWS.some((t) => t.id === v) ? v : 'all';
+  } catch {
+    return 'all';
+  }
+}
+function saveView(v) {
+  try { localStorage.setItem(VIEW_LS_KEY, v); } catch { /* storage disabled */ }
+}
+
 export default {
   setup() {
     const router = useRouter();
@@ -36,12 +90,16 @@ export default {
     // node outside the current subgraph re-focuses around the new node so the
     // walk-the-graph use-case keeps working even after a catalog/header nav.
     const focus = ref(null);   // null | { kind: 'node'|'edge', id: string }
+    const view = ref(loadView());   // 'all' | 'software' | 'devops'
     let nodeMap = {};
-    // Parts + contracts + edge-element refs survive past render() so the
-    // search-dimming watcher can recompute against fresh data without a
-    // graph re-render.
+    // partList/contractList hold the *currently rendered* (filtered) sets —
+    // search dimming, focus subgraph computation, and edge-click wiring all
+    // index into them. allParts/allContracts cache the full fetch so
+    // tab switches don't re-hit the API.
     let partList = [];
     let contractList = [];
+    let allParts = [];
+    let allContracts = [];
     let edgePathEls = [];
     let edgeLabelEls = [];
 
@@ -269,14 +327,25 @@ export default {
       status.value = 'loading';
       error.value = null;
       try {
-        const [parts, contracts] = await Promise.all([
-          api.fetchAll(api.listParts),
-          api.fetchAll(api.listContracts),
-        ]);
+        if (allParts.length === 0) {
+          const [p, c] = await Promise.all([
+            api.fetchAll(api.listParts),
+            api.fetchAll(api.listContracts),
+          ]);
+          allParts = p;
+          allContracts = c;
+        }
+
+        const { parts, contracts } = filterForView(view.value, allParts, allContracts);
         counts.value = { parts: parts.length, contracts: contracts.length };
 
-        if (parts.length === 0) {
+        if (allParts.length === 0) {
           status.value = 'empty';
+          return;
+        }
+        if (parts.length === 0) {
+          // Catalog has data but the view filtered everything out.
+          status.value = 'empty-view';
           return;
         }
 
@@ -331,15 +400,39 @@ export default {
     }
 
     onMounted(render);
-    watch(retryNonce, render);
+    // retryNonce is a hard reset — invalidate the cache and refetch.
+    watch(retryNonce, () => { allParts = []; allContracts = []; render(); });
+    // View change re-renders with the filtered subset. Focus might point at a
+    // node/edge that no longer exists in the new view, so clear it first;
+    // re-render then runs from a clean focus state.
+    watch(view, () => {
+      saveView(view.value);
+      focus.value = null;
+      render();
+    });
 
-    return { status, error, counts, containerRef, focus, clearFocus, onContainerClick };
+    function setView(id) { view.value = id; }
+
+    return { status, error, counts, containerRef, focus, clearFocus, onContainerClick, view, views: VIEWS, setView };
   },
   template: /* html */ `
     <section class="pane graph-pane" aria-label="architecture graph">
+      <div class="graph-tabs" role="tablist" aria-label="graph view">
+        <button
+          v-for="t in views"
+          :key="t.id"
+          type="button"
+          role="tab"
+          :aria-selected="view === t.id"
+          class="graph-tab"
+          :class="{ active: view === t.id }"
+          @click="setView(t.id)"
+        >{{ t.label }}</button>
+      </div>
       <div class="graph-stage">
         <div v-if="status === 'loading'" class="graph-loading">loading graph…</div>
         <div v-else-if="status === 'empty'" class="graph-empty">no parts registered</div>
+        <div v-else-if="status === 'empty-view'" class="graph-empty">no parts in this view — switch tabs or register parts of the matching subtype</div>
         <div v-else-if="status === 'error'" class="graph-error">
           <div class="graph-error-status">graph load failed</div>
           <div class="graph-error-detail">{{ error.detail || error.message }}</div>
