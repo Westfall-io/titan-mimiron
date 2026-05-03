@@ -1,14 +1,14 @@
 ---
 name: register-contract
-description: Register a new contract between two parts already in titan-tyr. Branches on subtype — currently `interaction` (the existing protocol/schema agreement, e.g. "Software A calls Software B over HTTP") or `binding` (an environment-specific deployment binding, e.g. "Container payments-prod is reachable at host=payments-prod, port=8080 by software payments-service"). Use when the user wants to create a new contract — e.g. "register a contract from X to Y", "create the binding for payments-prod", "we need an interaction contract between the API and the UI". Picks the two part endpoints (with ?match= autocomplete), fetches the matching template (`/templates/interaction` or `/templates/binding`), fills it, and POSTs to `/contracts`. Initial creation is `active` immediately — no propose/accept dance for v1.0.0; that's by design.
+description: Register a new contract between two parts already in titan-tyr. Branches on subtype — `interaction` (protocol/schema agreement, e.g. "Software A calls Software B over HTTP"), `binding` (environment-specific deployment binding, e.g. "Container payments-prod is reachable at host=payments-prod, port=8080 by software payments-service"), or `connection` (structural binding declared in build/config/deploy artifacts with no runtime data flow, e.g. "this image is built from this repo", "this container depends on that container at startup"). Use when the user wants to create a new contract — e.g. "register a contract from X to Y", "create the binding for payments-prod", "we need an interaction contract between the API and the UI", "record the depends-on between containers". Picks the two part endpoints (with ?match= autocomplete), fetches the matching template, fills it, and POSTs to `/contracts`. Initial creation is `active` immediately — no propose/accept dance for v1.0.0; that's by design.
 ---
 
 # register-contract
 
 You are helping the user register a new contract — a directed edge
-between two parts in titan-tyr's graph. Per #24, contracts come in
-subtypes — currently `interaction` and `binding`. The skill walks
-through `POST /contracts`.
+between two parts in titan-tyr's graph. Contracts come in three
+subtypes: `interaction` (#24), `binding` (#24), and `connection`
+(#32). The skill walks through `POST /contracts`.
 
 Both part endpoints must already exist as registered nodes — if
 either is missing, hand off to `/register-part` first. Only one
@@ -52,24 +52,43 @@ curl -fsS -H "Authorization: Bearer $TITAN_TYR_TOKEN" \
 ### 2. Pick the subtype
 
 Ask the user which kind of contract they want, or infer from context.
-The two subtypes encode different agreements with different validation
-rules:
+The three subtypes encode different agreements with different
+validation rules:
 
-| Subtype       | What it describes                                                            | Source (owner_part) | Target (counterparty_part) |
-| ------------- | ---------------------------------------------------------------------------- | ------------------- | -------------------------- |
-| `interaction` | Protocol/schema-level agreement (HTTP API, queue topic, RPC). Env-agnostic.  | any                 | any                        |
-| `binding`     | Deployment address binding (host/port/protocol from container to software). Env-specific. | `container`         | `software`                 |
+| Subtype       | What it describes                                                                                    | Source (owner_part)            | Target (counterparty_part)            |
+| ------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------ | ------------------------------------- |
+| `interaction` | Protocol/schema-level agreement (HTTP API, queue topic, RPC). Env-agnostic. Runtime data flows.      | any                            | any                                   |
+| `binding`     | Deployment address binding (host/port/protocol from container or pod to software). Env-specific. Runtime.   | `container` or `pod`           | `software`                            |
+| `connection`  | Structural binding declared in build/config/deploy artifacts. **No runtime data flow.**              | depends on `connection_type`   | depends on `connection_type`          |
 
 Quick rule of thumb:
 
 - "How does A talk to B?" / "What's the schema?" → **interaction**
 - "Where does the running container expose itself?" / "How does the software find its address?" → **binding**
+- "What does X build from / instantiate / depend on at startup / include as a submodule?" → **connection**
+- Test for connection vs interaction/binding: if the relationship is declared in a Dockerfile, compose file, k8s manifest, or `.gitmodules` and **no data flows at runtime**, it's a `connection`. If it's expressed in running application code or carries a runtime address, it's `interaction` or `binding`.
 
 If the user says "contract" without qualifying, default to `interaction`
 (today's existing behaviour) and confirm.
 
-The subtype determines which template you fetch in step 5 and shapes
-the validation in step 6.
+If the user picked `connection`, also pick the **connection_type** —
+one of six labels:
+
+| `connection_type` | Owner part subtype  | Counterparty part subtype | What it records                                     |
+| ----------------- | ------------------- | ------------------------- | --------------------------------------------------- |
+| `builds-from`     | `software`          | `image`                   | Repository builds into image (Dockerfile + CI)      |
+| `instantiates`    | `image`             | `container` or `pod`      | Image is run as a container or pod                  |
+| `runs`            | `container` or `pod`| `software`                | Runtime hosts a specific software process            |
+| `member-of`       | `container`         | `compose`                 | Container is a service entry in a compose stack     |
+| `depends-on`      | `container`         | `container`               | Startup ordering within a compose stack              |
+| `submodule`       | `software`          | `software`                | One repository includes another via `.gitmodules`   |
+
+All six labels work end-to-end after #37. The router still has a
+deferred-subtype guard for any future rule that references a
+not-yet-implemented Part subtype, but no current rule trips it.
+
+The subtype determines which template you fetch in step 7 and shapes
+the validation in step 4.
 
 ### 3. Resolve the two part endpoints
 
@@ -87,37 +106,52 @@ For each side (owner, then counterparty):
   `mimiron`), use `GET /parts?match=<label>`. Render hits as
   `<name> v<version> subtype=<software|container> aliases=[...]` and
   ask which one. If exactly one hit, suggest it as the default.
-- For `binding` specifically, the source side is almost always a
-  container — narrow the search with
-  `GET /parts?match=<label>&subtype=container` to avoid surfacing
-  unrelated software parts.
+- For `binding` specifically, the source side is a runtime — either
+  a container or a pod. Narrow the search with
+  `GET /parts?match=<label>&subtype=container` (or `&subtype=pod` for
+  K8s topologies) to avoid surfacing unrelated software parts.
 
 **"Not registered" handling.** If either side doesn't exist as a
 part, **stop**: the API will `404` and you can't proceed.
 Point the user at `/register-part` to create the missing node
 first, then come back.
 
-### 4. Subtype-specific validation (binding only)
+### 4. Subtype-specific validation
 
-For `binding`, the API enforces:
+Pre-flight the per-subtype rules so the user gets a clear message
+before the POST instead of a 422 after.
 
-- `owner_part.subtype == "container"` (the source must be a container)
+**`interaction`** — no source/target constraints. Any (part, part)
+pair is valid.
+
+**`binding`** — the API enforces:
+
+- `owner_part.subtype IN ("container", "pod")` (the source must be a runtime — either a container or a K8s pod)
 - `counterparty_part.subtype == "software"` (the target must be a software part)
 
-If either side fails this check, **stop early** with a clear message
-to the user — don't bother POSTing, the API will `422` with the same
-message. Examples of what to catch:
+Examples to catch:
 
 - User gave two software parts → "binding from software → software
   doesn't make sense; you probably want subtype `interaction`"
-- User flipped the direction (software → container) → "binding flows
-  outward from the container; want me to flip the direction?"
-- Source is a container but target is also a container → tell them and
-  ask what they meant.
+- User flipped the direction (software → container/pod) → "binding
+  flows outward from the runtime; want me to flip the direction?"
+- Source is a container or pod but target is also a runtime → tell
+  them and ask what they meant.
 
-For `interaction`, no source/target subtype constraints apply — any
-(part, part) pair is valid. (Interaction is the catch-all subtype that
-preserves today's behaviour.)
+**`connection`** — the per-label table from step 2 is the source of
+truth. For each `connection_type`, owner and counterparty must each
+match the rule's allow-set. Two failure modes worth distinguishing:
+
+1. **Wrong subtype for an implemented label.** E.g. `depends-on` with
+   `owner.subtype == "software"`. Tell the user the rule, suggest the
+   correct subtype (or a different label that fits what they have).
+2. **Label requires an un-implemented Part subtype.** No current
+   label is affected after #37 — every arm has both Part subtypes
+   shipped. The router still surfaces a clear "not yet implemented"
+   error if a future rule references a missing subtype; if the user
+   sees that error today, treat it as a regression and stop.
+
+If either check fails, **stop early** — don't POST.
 
 ### 5. Confirm direction
 
@@ -129,11 +163,11 @@ subtype:
   the interface — for an HTTP API, that's the server; the consumer is
   the counterparty. For a queue or event topic, owner is the publisher
   schema; the consumer subscribes.
-- **Binding.** Owner is the container (the side that *exposes* the
-  address); counterparty is the software (the side that *reads* the
-  address from env vars and constructs its callable URL). This
-  follows the direction of the address information, which mirrors the
-  direction of inbound traffic.
+- **Binding.** Owner is the runtime — container or pod — (the side
+  that *exposes* the address); counterparty is the software (the side
+  that *reads* the address from env vars and constructs its callable
+  URL). This follows the direction of the address information, which
+  mirrors the direction of inbound traffic.
 
 The schema enforces only that owner ≠ counterparty and that no
 contract already exists in that direction (regardless of subtype).
@@ -168,11 +202,15 @@ need.
 
 > **Note:** there's only one contract per directed pair regardless of
 > subtype. If the existing contract is the wrong subtype for what you
-> wanted (e.g. it's `interaction` and you wanted `binding`), the
-> resolution is *not* to register a second one — it's to discuss with
-> the counterparty whether the existing contract should be re-registered
-> as the other subtype (which today means tearing it down out-of-band;
-> there's no in-place subtype change). This is rare; flag and ask.
+> wanted (e.g. it's `interaction` and you wanted `binding`, or it's a
+> `connection` with the wrong `connection_type` label), the resolution
+> is *not* to register a second one — file an in-place correction via
+> `/propose-contract-subtype-shift` (provider v0.15.0+, titan-tyr#33).
+> The shift flow flips the subtype (and, for connection contracts, the
+> `connection_type` label) without bumping the version or mutating the
+> body, and runs through a separate two-party propose/accept handshake
+> via `/accept-contract-proposal`. Surface this as the path forward
+> rather than asking the user to tear the contract down out-of-band.
 
 If `results` is empty, continue.
 
@@ -180,10 +218,11 @@ If `results` is empty, continue.
 
 The template path depends on the subtype you picked in step 2:
 
-| Subtype       | Template URL                       |
-| ------------- | ---------------------------------- |
-| `interaction` | `$TITAN_TYR_URL/templates/interaction` |
-| `binding`     | `$TITAN_TYR_URL/templates/binding`     |
+| Subtype       | Template URL                              |
+| ------------- | ----------------------------------------- |
+| `interaction` | `$TITAN_TYR_URL/templates/interaction`    |
+| `binding`     | `$TITAN_TYR_URL/templates/binding`        |
+| `connection`  | `$TITAN_TYR_URL/templates/connection`     |
 
 ```sh
 curl -fsS -H "Authorization: Bearer $TITAN_TYR_TOKEN" \
@@ -267,13 +306,17 @@ every shell-escaping landmine.
 mkdir -p .scratch
 python3 -c "
 import json, pathlib
-print(json.dumps({
+payload = {
     'owner_part': 'payments-prod',
     'counterparty_part': 'payments-service',
     'subtype': 'binding',
     'markdown': pathlib.Path('.scratch/contract-body.md').read_text(),
     'version': '1.0.0',
-}))
+}
+# For subtype='connection', also include the connection_type label
+# picked in step 2 (e.g. 'depends-on' or 'submodule'):
+#   payload['connection_type'] = 'depends-on'
+print(json.dumps(payload))
 " > .scratch/contract-body.json
 
 curl -fsS -X POST \
@@ -317,7 +360,7 @@ been added yet"), surface them — don't auto-do.
 | `401`  | Bad bearer token                                                       | Stop. Tell user `TITAN_TYR_TOKEN` is wrong.                                 |
 | `404`  | Either `owner_part` or `counterparty_part` is unknown                  | Re-resolve in step 3; route to `/register-part` if truly missing.       |
 | `409`  | A contract already exists in this direction                            | Stop. Show the existing `contract_id` + `subtype` (re-run the search from step 6) and route to `/propose-contract-change`. |
-| `422`  | `owner_part == counterparty_part`, missing/unknown `subtype`, malformed `version`, slug pattern fail, or `binding` source/target subtype mismatch | Fix and retry. `version` is plain `MAJOR.MINOR.PATCH`. For `binding`, owner must be a container, counterparty must be a software part. |
+| `422`  | `owner_part == counterparty_part`, missing/unknown `subtype`, missing or wrong `connection_type` (required iff `subtype=connection`), malformed `version`, slug pattern fail, `binding` source/target subtype mismatch, `connection` source/target subtype mismatch per the per-label rule, or `connection_type` whose required Part subtype isn't yet implemented | Fix and retry. `version` is plain `MAJOR.MINOR.PATCH`. Re-check the rule table in step 2/4. |
 | `500+` | Server problem                                                         | Print response body verbatim. Do not retry.                                 |
 
 ## Notes
@@ -347,10 +390,11 @@ been added yet"), surface them — don't auto-do.
   contract markdown body if it matters to humans, not in a JSON field.
 - **Don't put a `Version` field inside the markdown body** — the API
   tracks it on the version row separately.
-- **Pod subtype is deferred.** The SysMLv2 binding definition allows
-  Pod Parts as a binding source too, but `pod` isn't a part subtype
-  yet (#24 deferred it). When it lands, this skill needs to expand
-  step 4 to accept `owner.subtype IN ("container", "pod")`.
+- **All Part subtypes referenced by the connection rule table are
+  implemented as of #37.** `image` shipped in #35, `pod` in #36,
+  `compose` in #37 — every `connection_type` arm works end-to-end.
+  The deferred-subtype check in the router stays in place as a
+  guard for any future rule that references a missing subtype.
 - **The contract template's fill rules are identical to the part
   template's.** If those rules grow, update both register skills in
   lockstep — same as the propose/accept pair.

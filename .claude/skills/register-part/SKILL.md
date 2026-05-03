@@ -1,13 +1,14 @@
 ---
 name: register-part
-description: Register a part with the titan-tyr API. A part is one of titan-tyr's typed nodes — currently subtype `software` (a codebase / deployable boundary) or `container` (a running instance of an image). Use when the user wants to add a new node to WatcherVault's graph — e.g. "register this repo with titan-tyr", "register the prod payments container", "create a part for X". Branches on subtype: fetches the matching template (`/templates/software` or `/templates/container`), helps the user fill it in, then POSTs to `/parts`.
+description: Register a part with the titan-tyr API. A part is one of titan-tyr's typed nodes — currently subtype `software` (a codebase / deployable boundary), `image` (a built artifact between source and container), `container` (a running instance of an image), `pod` (the K8s sibling of container), or `compose` (a Docker Compose stack — metadata about a compose file). Use when the user wants to add a new node to WatcherVault's graph — e.g. "register this repo with titan-tyr", "register the prod payments container", "register the payments image", "register the payments pod", "register the watchervault stack", "create a part for X". Branches on subtype: fetches the matching template (`/templates/software`, `/templates/image`, `/templates/container`, `/templates/pod`, or `/templates/compose`), helps the user fill it in, then POSTs to `/parts`.
 ---
 
 # register-part
 
 You are helping the user register a part with titan-tyr. **Parts** are
 the typed nodes in titan-tyr's graph; contracts (edges) connect them.
-Per #23, parts come in subtypes — currently `software` and `container`.
+Per #23 / #35 / #36 / #37, parts come in subtypes — currently
+`software`, `image`, `container`, `pod`, and `compose`.
 This skill walks through the **node creation** path: `POST /parts`.
 
 ## Server location
@@ -49,10 +50,15 @@ Branch on what the user is registering:
 | Subtype     | When to use                                                                             |
 | ----------- | --------------------------------------------------------------------------------------- |
 | `software`  | A codebase, deployable, or library. The "what does this thing do" node.                 |
-| `container` | A running instance of an image at a specific address — the live form of some software.  |
+| `image`     | A built artifact (tagged Docker image, Helm chart version, packaged binary). Sits between the source repo (`software`) and the running instance (`container` / `pod`). |
+| `container` | A running instance of an image at a specific address — the live form of some software (typically a Docker / Compose runtime). |
+| `pod`       | The K8s sibling of `container` — a scheduled unit of one or more co-located containers sharing a network namespace and storage. Use this for K8s-orchestrated runtimes; use `container` for Docker / Compose. |
+| `compose`   | A Docker Compose stack — a collection of services declared in a `compose.yaml`. Metadata *about* the file; the file itself remains the source of truth. The `member-of` Connection ties container parts into this stack. |
 
 If the user said something ambiguous ("register this service"), ask:
-"Software node (the codebase) or container (a running deployment of it)?"
+"Software (the codebase), image (the built artifact), container (a
+Docker / Compose runtime), pod (a K8s runtime), or compose (a stack
+of services)?"
 
 The subtype determines the template you fetch in step 4.
 
@@ -63,9 +69,9 @@ before the request — don't invent values:
 
 | Field               | Source                                                                                     |
 | ------------------- | ------------------------------------------------------------------------------------------ |
-| `name`              | Unique identifier across **all** parts (one namespace, software + container share it). Ask the user; suggest the repo name (for software) or `<image-name>-<env>` (for containers). |
-| `subtype`           | From step 2: `"software"` or `"container"`.                                                |
-| `repo_uri`          | Git URL. For software: read `git config --get remote.origin.url`; confirm. For container: the repo that defines the image / compose / deploy spec. |
+| `name`              | Unique identifier across **all** parts (one namespace, software + image + container + pod + compose share it). Ask the user; suggest the repo name (for software), `<service>-image` (for images), `<image-name>-<env>` (for containers), `<service>-pod` (for pods), or `<repo>-stack` (for compose stacks). |
+| `subtype`           | From step 2: `"software"`, `"image"`, `"container"`, `"pod"`, or `"compose"`.             |
+| `repo_uri`          | Git URL. For software: read `git config --get remote.origin.url`; confirm. For image: typically the same repo as the software it builds from. For container: the repo that defines the image / compose / deploy spec. For pod: the repo that owns the K8s manifest (Helm chart, kustomize overlay, raw YAML). For compose: the repo that owns the compose file. |
 | `issue_tracker_uri` | Optional. Where to file tickets if not the repo's default. Must be `https://`. |
 | `aliases`           | Optional list of colloquial labels other agents may use to refer to this part (`payments`, `billing`, `front end`, `前端`, `payments-prod`). Used by `GET /parts?match=<query>` for fuzzy lookup. Per-entry: 1–128 chars, no control chars/newlines, Unicode allowed; case-preserved on storage; case-insensitive dedupe within payload. Cross-part collisions allowed. |
 | `markdown`          | The filled-in part-template body for this subtype (see step 5).                            |
@@ -79,8 +85,17 @@ Pull the template matching the chosen subtype:
 # subtype=software
 curl -fsS -H "Authorization: Bearer $TITAN_TYR_TOKEN" "$TITAN_TYR_URL/templates/software"
 
+# subtype=image
+curl -fsS -H "Authorization: Bearer $TITAN_TYR_TOKEN" "$TITAN_TYR_URL/templates/image"
+
 # subtype=container
 curl -fsS -H "Authorization: Bearer $TITAN_TYR_TOKEN" "$TITAN_TYR_URL/templates/container"
+
+# subtype=pod
+curl -fsS -H "Authorization: Bearer $TITAN_TYR_TOKEN" "$TITAN_TYR_URL/templates/pod"
+
+# subtype=compose
+curl -fsS -H "Authorization: Bearer $TITAN_TYR_TOKEN" "$TITAN_TYR_URL/templates/compose"
 ```
 
 The template body is `text/markdown`. To get the **active template
@@ -136,11 +151,28 @@ guidance here, that's a signal to `/propose-template-change` instead.
 - **`software`** — there is no `runs` Connection on a software body;
   the binding to its runtime container is captured on the container
   side via a contract.
+- **`image`** — the body's Connections table typically has one inbound
+  `builds-from` row (from the software part it is built from) and one
+  or more outbound `instantiates` rows (one per container part it is
+  run as). **Ensure the software part it builds from is already
+  registered** before continuing (the `builds-from` connection contract
+  written in step 10 will need it).
 - **`container`** — the body has `Ports` and `Connections` tables. The
   `runs` row in Connections refers by name to the software part this
   container hosts. **Ensure that software part is already registered**
   (step 8 below — pre-flight check). If not, register it first via this
   same skill (subtype=software) before continuing.
+- **`pod`** — the body has `Containers`, `Networking`, `Replicas`, and
+  `Connections` tables. The `runs` Connection points at the software
+  part this pod hosts; one `instantiates` row per container in the
+  pod points at the image being run. **Ensure those parts are already
+  registered** before continuing (the connection contracts written in
+  step 10 will need them).
+- **`compose`** — the body has `Services`, `Network topology`,
+  `Volume mounts`, and `Env-var overlay strategy` tables. Each
+  service row references a Container Part by name. The Compose Part
+  is metadata *about* the file — keep it consistent with the file
+  but don't try to make it parseable as compose YAML.
 
 ### 7. Preview before submitting
 
@@ -166,6 +198,18 @@ curl -fsS -o /dev/null -w '%{http_code}' \
 For `subtype=container`, additionally pre-flight that the software
 part referenced in the body's `runs` Connection actually exists.
 
+For `subtype=image`, additionally pre-flight that the software part
+referenced in the body's `builds-from` Connection actually exists.
+
+For `subtype=pod`, additionally pre-flight that the software part
+referenced in the body's `runs` Connection and the image part(s)
+referenced in `instantiates` rows actually exist.
+
+For `subtype=compose`, additionally pre-flight that each container
+part listed in the body's `Services` table actually exists. The
+`member-of` Connections that wire those containers to this stack
+should follow registration (see step 10).
+
 ### 9. Submit
 
 **Scratch files must live inside the project.** Use `.scratch/` at the
@@ -183,7 +227,7 @@ python3 -c "
 import json, pathlib
 print(json.dumps({
     'name': 'payments-service',
-    'subtype': 'software',                      # or 'container'
+    'subtype': 'software',                      # or 'image' / 'container' / 'pod' / 'compose'
     'repo_uri': 'https://github.com/example/payments-service',
     # 'aliases': ['payments', 'billing'],       # uncomment if the user gave any
     'markdown': pathlib.Path('.scratch/body.md').read_text(),
@@ -209,7 +253,24 @@ On `201`, summarise:
 For containers: ask if the user wants to register the `runs` contract
 linking this container to the software part it hosts (one
 `POST /contracts` with the container as owner, the software as
-counterparty). Do NOT do this automatically — surface the option.
+counterparty). If an image part exists for this container, also
+surface the `instantiates` connection (image → container). Do NOT do
+this automatically — surface the option.
+
+For pods: ask if the user wants to register the `runs` connection
+(pod → software, the software it hosts), the `binding` (pod →
+software, runtime address), and one `instantiates` connection per
+container in the pod (image → pod). Do NOT do this automatically.
+
+For compose stacks: ask if the user wants to register one
+`member-of` connection per container service in the stack (container
+→ compose). Do NOT do this automatically.
+
+For images: ask if the user wants to register the `builds-from`
+connection linking this image to the software part it is built from
+(one `POST /contracts` subtype=connection, connection_type=builds-from,
+with the software as owner and the image as counterparty). Do NOT do
+this automatically.
 
 For software: ask if the user wants to register interface contracts
 between this software and any other already-registered parts. Do NOT
@@ -226,12 +287,22 @@ do this automatically.
 
 ## Notes
 
-- **One namespace.** `name` is unique across software AND container
-  parts. A common pattern is `<service>` for the software part and
-  `<service>-<env>` for the container (`payments`, `payments-prod`).
-- **Subtype is structural.** It can't be changed after registration
-  (no PUT path mutates it). If you really need a different subtype,
-  register a new part.
+- **One namespace.** `name` is unique across software, image,
+  container, pod, AND compose parts. A common pattern is `<service>`
+  for the software part, `<service>-image` for the canonical image
+  built from it, `<service>-<env>` for the container, `<service>-pod`
+  for the K8s pod, and `<repo>-stack` for the Compose stack
+  (`payments`, `payments-image`, `payments-prod`, `payments-pod`,
+  `watchervault-stack`).
+- **Subtype is structural.** `PUT /parts/{name}` cannot change it.
+  To correct a mis-classified subtype post-registration without
+  losing the canonical name, version history, or existing contracts,
+  file a shift via `/propose-part-subtype-shift` (provider v0.15.0+,
+  titan-tyr#33) and land it via `/accept-part-subtype-shift`. The
+  shift flow flips `subtype` and stamps `subtype_shifted_from` /
+  `subtype_shifted_at` without bumping the version or mutating the
+  body. Only register a new part if you actually want a separate
+  node, not a corrected subtype.
 - **Do not** put a `Version` field inside the markdown body — the API
   tracks it on the version row separately. The template's header note
   explains why.

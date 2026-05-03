@@ -11,9 +11,13 @@ flow — same machinery as templates. This skill **creates the
 proposal**; it never accepts. Acceptance is the user's explicit next
 step (`/accept-contract-proposal`).
 
-This skill is for **amending an existing contract**. Initial contract
-creation goes through a register skill (currently raw `POST /contracts`
-— skill tracked separately).
+This skill is for **amending an existing contract's body** — the
+markdown content, with a version bump. If the user wants to correct
+the contract's structural `subtype` (or, for connection contracts,
+the `connection_type` label) without touching the body or bumping
+the version, route them to `/propose-contract-subtype-shift` instead;
+that's a separate orthogonal flow (provider v0.15.0+, titan-tyr#33).
+Initial contract creation goes through `/register-contract`.
 
 ## Server location
 
@@ -75,7 +79,8 @@ gave you:
   Render `owner → counterparty [<subtype>] v<version>` and ask which
   one. If the result set is paginated (`next` is non-null), warn that
   you've shown the first page and offer to drill in by part name (or
-  by `?subtype=<interaction|binding>`) instead.
+  by `?subtype=<interaction|binding|connection>` (and optionally
+  `?connection_type=<label>` when `subtype=connection`)) instead.
 
 ### 3. Fetch the current active body
 
@@ -116,7 +121,7 @@ will need to be checked against it. Fetch the template state now so
 you have it in hand:
 
 ```sh
-# subtype came from step 3's contract body (interaction | binding)
+# subtype came from step 3's contract body (interaction | binding | connection)
 curl -fsS -H "Authorization: Bearer $TITAN_TYR_TOKEN" \
   "$TITAN_TYR_URL/templates/<subtype>/proposals" \
   | python3 -c "
@@ -157,12 +162,12 @@ matching the contract's subtype:
 
 - `<!-- template: interaction@X.Y.Z -->` for `interaction` contracts
 - `<!-- template: binding@X.Y.Z -->` for `binding` contracts
+- `<!-- template: connection@X.Y.Z -->` for `connection` contracts (#32)
 - `<!-- template: contract@X.Y.Z -->` is **legacy** — the `contract`
   template kind was renamed to `interaction` in titan-tyr v0.10.0
-  (#24) and a sibling `binding` kind was added. Any modern contract
-  carrying `contract@` is by definition stamp-stale and must be
-  re-stamped to `interaction@` (or `binding@` if it's actually a
-  binding contract that escaped the rename).
+  (#24) and the sibling `binding` and `connection` kinds were added.
+  Any modern contract carrying `contract@` is by definition
+  stamp-stale and must be re-stamped to the correct subtype kind.
 
 Compare the proposed body's stamp against the template state from
 step 4b:
@@ -170,6 +175,7 @@ step 4b:
 | Stamp state                                                 | What to do                                                                                                                                                                                                                                              |
 | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Stamp `kind` is `contract` (legacy)                         | Re-stamp to `<subtype>@<active-template-version>`. This is a structural migration; surface it as such, but do not skip it — a modern contract cannot keep the legacy stamp.                                                                              |
+| Stamp `kind` is a valid contract kind but **doesn't match the contract's current `subtype`** (post-shift case) | The contract was shifted to a new subtype via `/accept-contract-proposal` (the subtype-shift branch, provider v0.15.0+) and the body wasn't re-stamped at that time — the shift accept flagged `body_realign_required: true`. Re-stamp to `<current-subtype>@<active-template-version>`. This is the expected follow-up action after a subtype shift lands. |
 | Stamp `kind` matches subtype, version == active             | No drift. Continue.                                                                                                                                                                                                                                     |
 | Stamp `kind` matches subtype, version older than active     | Body is using stale template terminology. Mention to the user; offer to re-stamp. Do not silently re-stamp.                                                                                                                                              |
 | Stamp `kind` matches subtype, version newer than active     | Body's stamp points at a template version that **isn't active yet**. See template-acceptance race below.                                                                                                                                                  |
