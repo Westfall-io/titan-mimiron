@@ -23,6 +23,7 @@ Same env vars as the other titan-tyr skills:
 | ----------------- | -------- | ------------------------------------------------ |
 | `TITAN_TYR_URL`   | yes      | Base URL of the API. No trailing slash.          |
 | `TITAN_TYR_TOKEN` | no       | Bearer token. Defaults to `sysmlv2`.             |
+| `TITAN_TYR_ACTOR` | no       | Identity for the X-Actor header. **Strongly recommended** — accept enforces the proposer-doesn't-accept rule (provider v0.16.0+, #38). Anonymous acceptors get past the rule but skip the structural review. |
 
 If `TITAN_TYR_URL` is unset, **stop and tell the user**:
 
@@ -118,10 +119,27 @@ clean confirmation step matters more here than on propose.
 ```sh
 curl -fsS -X POST \
      -H "Authorization: Bearer $TITAN_TYR_TOKEN" \
+     -H "X-Actor: $TITAN_TYR_ACTOR" \
      "$TITAN_TYR_URL/templates/{kind}/proposals/{version}/accept"
 ```
 
-No request body — the path is the entire input.
+No request body — the path is the entire input. The `X-Actor`
+header carries the acceptor identity for the proposer-doesn't-accept
+rule (provider v0.16.0+, #38). If `proposer_actor == X-Actor` on
+the proposal row, the call returns `422`; override with
+`?single_operator=true` only in genuine single-operator setups:
+
+```sh
+curl -fsS -X POST \
+     -H "Authorization: Bearer $TITAN_TYR_TOKEN" \
+     -H "X-Actor: $TITAN_TYR_ACTOR" \
+     "$TITAN_TYR_URL/templates/{kind}/proposals/{version}/accept?single_operator=true"
+```
+
+If `TITAN_TYR_ACTOR` is unset, the rule cannot be enforced and the
+accept proceeds — surface a warning that the structural review gate
+was bypassed. Templates affect every consumer; the gate matters
+more here than for any single contract.
 
 ### 7. Report
 
@@ -129,9 +147,22 @@ On `200`, summarise the response:
 
 > Accepted. `<kind>` template active version is now `<active_version>`
 > (promoted from `<promoted_from_version>` at `<accepted_at>`).
+> Proposer: `<proposer_actor or "anonymous">`. Acceptor: `<acceptor_actor or "anonymous">`.
 >
 > Verify:
 >   `curl -H 'Authorization: Bearer sysmlv2' $TITAN_TYR_URL/templates/<kind>`
+
+If the response carries `single_operator_override: true`, surface
+it loudly:
+
+> ⚠ Accepted under single-operator override (`?single_operator=true`).
+> The two-party rule was bypassed. Templates affect every consumer
+> that fetches them, so an override here is unusually consequential —
+> mention it prominently so operators reviewing later see the bypass.
+
+If the response carries `proposer_actor: null` or
+`acceptor_actor: null`, surface that — the rule was unenforceable
+and that fact should be visible.
 
 Then flag any companion follow-ups the proposal body called out (it's
 a common pattern for the proposal markdown to note "update skill X" or
