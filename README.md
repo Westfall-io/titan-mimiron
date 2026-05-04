@@ -2,13 +2,9 @@
 
 The WatcherVault Web UI — a **read-only** browser into the WatcherVault catalog of parts and contracts. titan-mimiron is intentionally read-only by design (see [DESIGN-MVP.md](./DESIGN-MVP.md) → "Scope: read-only, by design"); part registration and contract proposals happen via the API directly or via the `register-software` Claude skill in this repo.
 
-> **Status:** 0.18.0 — adopts titan-tyr v0.18.0 surface (closes #48) by landing all of contract `94def627`'s `2.5.0-rc2` consumer obligations in one cutover. Two themes:
+> **Status:** 0.18.1 — catalog hygiene + skill sync, no UI changes. Closes mimiron#47 by splitting the conflated `titan-mimiron` software part into `titan-mimiron-server` (the nginx + reverse-proxy hop) and `titan-mimiron-spa` (the JavaScript bundle the browser actually consumes the API from), using titan-tyr v0.21.0's new name-shift + endpoint-shift propose/accept flows. The consumer-facing interaction contract `94def627` was retargeted in place to `titan-mimiron-spa`; a parallel proxy-hop interaction contract pins `(titan-tyr → titan-mimiron-server)`; the image part picks up a second `builds-from` edge from the spa. Synced 23 skills from titan-tyr v0.21.0 (4 new shift skills + `update-contract`).
 >
-> **Projects (2.5.0):** new project-picker dropdown in the header (right of the search box) sourced from `GET /projects`, with three modes — *all projects* (default), *— unprojected —* (`?project=__none__`), or a specific slug. Selection is persisted in the URL query so reloads/share-links keep the filter and back/forward updates the picker. The chosen project filters both the catalog pane and the graph via the server-side `?project=` param. Every catalog row, part-detail topbar, and contract-detail topbar now carries a project chip (clickable → project detail; muted "— unprojected —" when null). Cross-project contracts get an explicit boundary banner on `ContractDetail` showing each side's project. New `/projects/:name` route renders description, `created_by_actor`, part/contract counts, and a "scope catalog to this project" affordance. Project create/edit/delete remain skill-driven (`/register-project`).
->
-> **X-Actor visibility (2.4.0):** part and contract detail topbars surface `created_by_actor` ("registered by …" or "registered: anonymous (legacy)" for pre-v0.16.0 rows). `HistoryPanel` extends `body_bump` rows (and template-proposal rows) with `proposer_actor` / `acceptor_actor` / `single_operator_override` chips — the override flag renders as a visible amber audit affordance per the obligation that two-party-rule bypasses must be auditable. `OpenShiftsPanel` likewise surfaces the override flag.
->
-> Builds on 0.17.0 (orientation toggle).
+> Builds on 0.18.0 (project picker + X-Actor visibility).
 
 ---
 
@@ -108,7 +104,7 @@ titan-tyr (REST API)
 titan-mimiron (this repo — Web UI)
 ```
 
-titan-mimiron talks **only** to titan-tyr. The mimiron ↔ tyr contract is registered in titan-tyr (see `GET /parts/titan-mimiron/contracts`).
+titan-mimiron talks **only** to titan-tyr. The repo registers two software parts in titan-tyr — `titan-mimiron-server` (the nginx + reverse-proxy hop) and `titan-mimiron-spa` (the JavaScript bundle the browser executes); the actual API consumer is the SPA. See `GET /parts/titan-mimiron-spa/contracts` and `GET /parts/titan-mimiron-server/contracts`.
 
 ## Repository layout
 
