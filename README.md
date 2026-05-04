@@ -2,7 +2,7 @@
 
 The WatcherVault Web UI — a **read-only** browser into the WatcherVault catalog of parts and contracts. titan-mimiron is intentionally read-only by design (see [DESIGN-MVP.md](./DESIGN-MVP.md) → "Scope: read-only, by design"); part registration and contract proposals happen via the API directly or via the `register-software` Claude skill in this repo.
 
-> **Status:** 0.16.0 — distinguishes contract subtypes on graph edges (closes #41). Color stays unified (the part-subtype palette from 0.14.0 owns color); subtype is encoded by **line style + label glyph**: interaction = solid + `▷`, binding = thicker solid + `▣`, connection = dashed + `┄`. The legend strip now itemizes all three subtypes with per-subtype counts so the encoding is self-documenting. No API or contract changes — `subtype` already comes back on `GET /contracts`; this is consumer-side rendering only. Builds on 0.15.0 (subtype-shift render).
+> **Status:** 0.17.0 — adds an **LR/TB orientation toggle** to the graph header (right of the view tabs); the choice is persisted in `localStorage` so each user keeps their preferred layout direction across reloads. The originally-scoped tier-based ranking by subtype (compose→pod→container→image→software) was attempted and reverted: Mermaid 11 has no `rank=same` primitive ([mermaid-js/mermaid#3723](https://github.com/mermaid-js/mermaid/issues/3723)) and `~~~` invisible-link rank hints lose to opposing real contract edges; tracked separately for a future renderer/diagram-type decision. Builds on 0.16.0 (per-subtype edge styling).
 
 ---
 

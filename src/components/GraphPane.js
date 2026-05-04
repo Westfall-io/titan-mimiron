@@ -19,8 +19,9 @@ const EDGE_SUBTYPE = {
   connection:  { glyph: '┄', linkStyle: 'stroke-dasharray:6 4' },
 };
 
-function buildSource(parts, contracts) {
-  const lines = ['graph LR'];
+function buildSource(parts, contracts, orientation) {
+  const dir = orientation === 'TB' ? 'TB' : 'LR';
+  const lines = [`graph ${dir}`];
   for (const p of parts) {
     lines.push(`  ${slug(p.name)}["${p.name}"]`);
   }
@@ -93,6 +94,19 @@ function saveView(v) {
   try { localStorage.setItem(VIEW_LS_KEY, v); } catch { /* storage disabled */ }
 }
 
+const ORIENT_LS_KEY = 'mimiron.graph.orientation';
+function loadOrientation() {
+  try {
+    const v = localStorage.getItem(ORIENT_LS_KEY);
+    return v === 'TB' ? 'TB' : 'LR';
+  } catch {
+    return 'LR';
+  }
+}
+function saveOrientation(v) {
+  try { localStorage.setItem(ORIENT_LS_KEY, v); } catch { /* storage disabled */ }
+}
+
 export default {
   setup() {
     const router = useRouter();
@@ -109,6 +123,7 @@ export default {
     // walk-the-graph use-case keeps working even after a catalog/header nav.
     const focus = ref(null);   // null | { kind: 'node'|'edge', id: string }
     const view = ref(loadView());   // 'all' | 'software' | 'devops'
+    const orientation = ref(loadOrientation());   // 'LR' | 'TB'
     let nodeMap = {};
     // partList/contractList hold the *currently rendered* (filtered) sets —
     // search dimming, focus subgraph computation, and edge-click wiring all
@@ -405,7 +420,7 @@ export default {
           },
         });
 
-        const source = buildSource(parts, contracts);
+        const source = buildSource(parts, contracts, orientation.value);
         const { svg } = await mermaid.render('mimiron-graph', source);
         containerRef.value.innerHTML = svg;
 
@@ -434,10 +449,22 @@ export default {
       focus.value = null;
       render();
     });
+    // Orientation flip — re-render with the new direction; preserve focus
+    // (focus targets a node/edge id, which is stable across orientations).
+    watch(orientation, () => {
+      saveOrientation(orientation.value);
+      render();
+    });
 
     function setView(id) { view.value = id; }
+    function toggleOrientation() {
+      orientation.value = orientation.value === 'LR' ? 'TB' : 'LR';
+    }
 
-    return { status, error, counts, containerRef, focus, clearFocus, onContainerClick, view, views: VIEWS, setView };
+    return {
+      status, error, counts, containerRef, focus, clearFocus, onContainerClick,
+      view, views: VIEWS, setView, orientation, toggleOrientation,
+    };
   },
   template: /* html */ `
     <section class="pane graph-pane" aria-label="architecture graph">
@@ -452,6 +479,13 @@ export default {
           :class="{ active: view === t.id }"
           @click="setView(t.id)"
         >{{ t.label }}</button>
+        <span class="graph-tabs-spacer"></span>
+        <button
+          type="button"
+          class="graph-orient-toggle"
+          :title="'switch to ' + (orientation === 'LR' ? 'top-to-bottom' : 'left-to-right') + ' layout'"
+          @click="toggleOrientation"
+        >{{ orientation }}</button>
       </div>
       <div class="graph-stage">
         <div v-if="status === 'loading'" class="graph-loading">loading graph…</div>
