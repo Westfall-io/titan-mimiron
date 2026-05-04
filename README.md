@@ -2,7 +2,13 @@
 
 The WatcherVault Web UI — a **read-only** browser into the WatcherVault catalog of parts and contracts. titan-mimiron is intentionally read-only by design (see [DESIGN-MVP.md](./DESIGN-MVP.md) → "Scope: read-only, by design"); part registration and contract proposals happen via the API directly or via the `register-software` Claude skill in this repo.
 
-> **Status:** 0.17.0 — adds an **LR/TB orientation toggle** to the graph header (right of the view tabs); the choice is persisted in `localStorage` so each user keeps their preferred layout direction across reloads. The originally-scoped tier-based ranking by subtype (compose→pod→container→image→software) was attempted and reverted: Mermaid 11 has no `rank=same` primitive ([mermaid-js/mermaid#3723](https://github.com/mermaid-js/mermaid/issues/3723)) and `~~~` invisible-link rank hints lose to opposing real contract edges; tracked separately for a future renderer/diagram-type decision. Builds on 0.16.0 (per-subtype edge styling).
+> **Status:** 0.18.0 — adopts titan-tyr v0.18.0 surface (closes #48) by landing all of contract `94def627`'s `2.5.0-rc2` consumer obligations in one cutover. Two themes:
+>
+> **Projects (2.5.0):** new project-picker dropdown in the header (right of the search box) sourced from `GET /projects`, with three modes — *all projects* (default), *— unprojected —* (`?project=__none__`), or a specific slug. Selection is persisted in the URL query so reloads/share-links keep the filter and back/forward updates the picker. The chosen project filters both the catalog pane and the graph via the server-side `?project=` param. Every catalog row, part-detail topbar, and contract-detail topbar now carries a project chip (clickable → project detail; muted "— unprojected —" when null). Cross-project contracts get an explicit boundary banner on `ContractDetail` showing each side's project. New `/projects/:name` route renders description, `created_by_actor`, part/contract counts, and a "scope catalog to this project" affordance. Project create/edit/delete remain skill-driven (`/register-project`).
+>
+> **X-Actor visibility (2.4.0):** part and contract detail topbars surface `created_by_actor` ("registered by …" or "registered: anonymous (legacy)" for pre-v0.16.0 rows). `HistoryPanel` extends `body_bump` rows (and template-proposal rows) with `proposer_actor` / `acceptor_actor` / `single_operator_override` chips — the override flag renders as a visible amber audit affordance per the obligation that two-party-rule bypasses must be auditable. `OpenShiftsPanel` likewise surfaces the override flag.
+>
+> Builds on 0.17.0 (orientation toggle).
 
 ---
 

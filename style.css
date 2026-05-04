@@ -336,7 +336,7 @@ body.is-resizing * { cursor: col-resize !important; user-select: none !important
 
 /* ───── Chips ───── */
 
-.version-chip, .alias-chip, .template-chip, .updated-chip, .direction-chip {
+.version-chip, .alias-chip, .template-chip, .updated-chip, .direction-chip, .project-chip, .actor-chip, .override-chip {
   display: inline-block;
   padding: 1px 6px;
   font-family: var(--mono);
@@ -354,6 +354,42 @@ body.is-resizing * { cursor: col-resize !important; user-select: none !important
 .alias-chip { color: var(--text3); }
 .template-chip { color: var(--purple); border-color: var(--purple); opacity: 0.7; text-decoration: none; }
 a.template-chip:hover { opacity: 1; background: rgba(155, 114, 232, 0.1); }
+
+/* Project chip — small slug pill near subtype/version. Click navigates to
+   project detail. The "unprojected" variant is muted so users distinguish
+   "no tag" from "tagged X." */
+.project-chip {
+  color: var(--green);
+  border-color: rgba(61, 186, 122, 0.4);
+  background: rgba(61, 186, 122, 0.08);
+  text-decoration: none;
+}
+a.project-chip:hover { background: rgba(61, 186, 122, 0.18); }
+.project-chip.project-none {
+  color: var(--text3);
+  border-color: var(--border2);
+  background: transparent;
+  font-style: italic;
+  cursor: default;
+}
+
+/* Actor chip — surfaces X-Actor attribution (proposer/acceptor/registered).
+   Anonymous variant flagged so audits can spot two-party-rule bypasses. */
+.actor-chip {
+  color: var(--text2);
+  border-color: var(--border2);
+  background: transparent;
+}
+.actor-chip.actor-anon { color: var(--coral); border-color: rgba(224, 90, 78, 0.4); }
+.actor-chip.actor-chip-mini { font-size: 8px; padding: 1px 4px; }
+
+/* Override chip — visible audit trail for ?single_operator=true accepts.
+   Amber to read as "warning, but allowed by design." */
+.override-chip {
+  color: var(--amber);
+  border-color: var(--amber);
+  background: rgba(232, 168, 58, 0.08);
+}
 
 .proposal-chip {
   display: inline-block;
@@ -481,6 +517,7 @@ a.template-chip:hover { opacity: 1; background: rgba(155, 114, 232, 0.1); }
 .type-badge.type-contract { background: rgba(155, 114, 232, 0.15); color: var(--purple); }
 .type-badge.type-graph    { background: rgba(46, 196, 182, 0.15); color: var(--teal); }
 .type-badge.type-template { background: rgba(232, 168, 58, 0.15); color: var(--amber); }
+.type-badge.type-project  { background: rgba(61, 186, 122, 0.15); color: var(--green); }
 
 /* Subtype chip: smaller than type-badge; rendered next to part/contract
    type badges and in catalog/contract rows. Two part subtypes
@@ -534,6 +571,76 @@ a.template-chip:hover { opacity: 1; background: rgba(155, 114, 232, 0.1); }
 }
 
 .connection-type-chip.connection-type-mini { padding: 1px 5px; font-size: 8px; }
+
+/* Cross-project boundary banner — surfaces when a contract's `project`
+   differs from one or both endpoints'. Cross-project contracts are allowed
+   by design (they carry whichever project owns the relationship), but the
+   boundary should be visible so users see the asymmetry. Amber outlines
+   read as "notable, not error." */
+.cross-project-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 6px 10px;
+  background: rgba(232, 168, 58, 0.06);
+  border: 1px solid rgba(232, 168, 58, 0.4);
+  border-radius: 3px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text2);
+}
+.cross-project-glyph {
+  color: var(--amber);
+  font-size: 14px;
+  font-weight: 600;
+}
+.cross-project-label {
+  color: var(--amber);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 9px;
+}
+.cross-project-detail { color: var(--text3); }
+.cross-project-slug { color: var(--text); }
+
+/* Project picker — sits in the header, right of the search box. The select
+   element is intentionally narrow; project slugs are short by convention. */
+.project-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text3);
+}
+.project-picker-label {
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 9px;
+}
+.project-picker-select {
+  appearance: none;
+  background: var(--bg2);
+  color: var(--text);
+  border: 1px solid var(--border2);
+  border-radius: 3px;
+  padding: 3px 24px 3px 8px;
+  font-family: var(--mono);
+  font-size: 10px;
+  cursor: pointer;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--text3) 50%),
+    linear-gradient(135deg, var(--text3) 50%, transparent 50%);
+  background-position:
+    calc(100% - 12px) 50%,
+    calc(100% - 8px) 50%;
+  background-size: 4px 4px, 4px 4px;
+  background-repeat: no-repeat;
+}
+.project-picker-select:hover { border-color: var(--accent2); }
+.project-picker-select:focus { outline: 1px solid var(--accent); outline-offset: 1px; }
 
 .topbar-name {
   font-family: var(--mono);

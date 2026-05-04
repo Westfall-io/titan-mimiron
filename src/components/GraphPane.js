@@ -2,7 +2,7 @@ import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import mermaid from 'mermaid';
 import * as api from '../api.js';
-import { retryNonce, search } from '../store.js';
+import { retryNonce, search, project } from '../store.js';
 
 // Mermaid IDs must be alphanumeric/underscore. Part names are slug-shaped
 // — replace hyphens with underscores and prefix to guarantee an alpha leading char.
@@ -365,9 +365,14 @@ export default {
       error.value = null;
       try {
         if (allParts.length === 0) {
+          // Server-side `?project=` filter mirrors the catalog pane so both
+          // surfaces show the same scoped subset. The graph caches once per
+          // project value; the project watcher below clears the cache so
+          // a filter flip refetches.
+          const opts = project.value ? { project: project.value } : {};
           const [p, c] = await Promise.all([
-            api.fetchAll(api.listParts),
-            api.fetchAll(api.listContracts),
+            api.fetchAll(api.listParts, opts),
+            api.fetchAll(api.listContracts, opts),
           ]);
           allParts = p;
           allContracts = c;
@@ -441,6 +446,9 @@ export default {
     onMounted(render);
     // retryNonce is a hard reset — invalidate the cache and refetch.
     watch(retryNonce, () => { allParts = []; allContracts = []; render(); });
+    // Project filter flip: same hard-reset semantics — the cached set is
+    // scoped to the prior project value, so we drop it and refetch.
+    watch(project, () => { allParts = []; allContracts = []; focus.value = null; render(); });
     // View change re-renders with the filtered subset. Focus might point at a
     // node/edge that no longer exists in the new view, so clear it first;
     // re-render then runs from a clean focus state.

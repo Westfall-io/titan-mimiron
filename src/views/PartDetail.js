@@ -65,12 +65,16 @@ export default {
           <div class="topbar-row">
             <span class="type-badge type-part">part</span>
             <span class="subtype-chip" :class="'subtype-' + part.subtype">{{ part.subtype }}</span>
+            <router-link v-if="part.project" :to="'/projects/' + encodeURIComponent(part.project)" class="project-chip" :title="'project: ' + part.project">{{ part.project }}</router-link>
+            <span v-else class="project-chip project-none" title="unprojected (no project tag)">— unprojected —</span>
             <span class="topbar-name">{{ part.name }}</span>
           </div>
           <div class="topbar-row chips">
             <span class="version-chip">v{{ part.version }}</span>
             <router-link v-if="stamp.version" :to="'/templates/' + stamp.kind" class="template-chip" title="View template">tpl {{ stamp.kind }}@{{ stamp.version }}</router-link>
             <span class="updated-chip" :title="part.updated_at">{{ relativeTime(part.updated_at) }}</span>
+            <span v-if="part.created_by_actor" class="actor-chip" :title="'X-Actor at registration time'">registered by {{ part.created_by_actor }}</span>
+            <span v-else class="actor-chip actor-anon" title="No X-Actor recorded — pre-v0.16.0 row or registered without attribution">registered: anonymous (legacy)</span>
           </div>
           <div class="topbar-row links">
             <a :href="repoLink(part.repo_uri)" target="_blank" rel="noopener" class="link-pill">repo</a>
