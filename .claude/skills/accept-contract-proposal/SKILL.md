@@ -52,6 +52,7 @@ Same env vars as the other titan-tyr skills:
 | ----------------- | -------- | ------------------------------------------------ |
 | `TITAN_TYR_URL`   | yes      | Base URL of the API. No trailing slash.          |
 | `TITAN_TYR_TOKEN` | no       | Bearer token. Defaults to `sysmlv2`.             |
+| `TITAN_TYR_ACTOR` | no       | Identity for the X-Actor header. **Strongly recommended** — both content and shift accepts enforce the proposer-doesn't-accept rule (provider v0.16.0+, #38) when both sides set it. Anonymous acceptors get past the rule but skip the structural review. |
 
 If `TITAN_TYR_URL` is unset, **stop and tell the user**:
 
@@ -264,10 +265,27 @@ clean confirmation step matters more here than on propose.
 ```sh
 curl -fsS -X POST \
      -H "Authorization: Bearer $TITAN_TYR_TOKEN" \
+     -H "X-Actor: $TITAN_TYR_ACTOR" \
      "$TITAN_TYR_URL/contracts/{contract_id}/proposals/{version}/accept"
 ```
 
-No request body — the path is the entire input.
+No request body — the path is the entire input. The `X-Actor`
+header carries the acceptor identity for the proposer-doesn't-accept
+rule (provider v0.16.0+, #38). If `proposer_actor == X-Actor` on
+the proposal row, the call returns `422` with a clear message;
+override with `?single_operator=true` only in genuine
+single-operator setups:
+
+```sh
+curl -fsS -X POST \
+     -H "Authorization: Bearer $TITAN_TYR_TOKEN" \
+     -H "X-Actor: $TITAN_TYR_ACTOR" \
+     "$TITAN_TYR_URL/contracts/{contract_id}/proposals/{version}/accept?single_operator=true"
+```
+
+If `TITAN_TYR_ACTOR` is unset, the rule cannot be enforced and the
+accept proceeds — surface a warning to the user that the structural
+review gate was bypassed.
 
 ### 8. Report
 
@@ -276,9 +294,22 @@ On `200`, summarise the response:
 > Accepted. `<subtype>` contract `<owner> → <counterparty>` is now at
 > `<active_version>` (promoted from `<promoted_from_version>` at
 > `<accepted_at>`).
+> Proposer: `<proposer_actor or "anonymous">`. Acceptor: `<acceptor_actor or "anonymous">`.
 >
 > Verify:
 >   `curl -H 'Authorization: Bearer sysmlv2' $TITAN_TYR_URL/contracts/<contract_id>`
+
+If the response carries `single_operator_override: true`, surface it
+loudly in the summary:
+
+> ⚠ Accepted under single-operator override (`?single_operator=true`).
+> The two-party rule was bypassed for this accept. The flag is recorded
+> on the active version row so the bypass is visible in the audit
+> trail; mention it explicitly so operators reviewing later see it.
+
+If the response carries `proposer_actor: null` or
+`acceptor_actor: null`, surface that too — the rule was unenforceable
+and that fact should be visible.
 
 Then flag any companion follow-ups the proposal body called out (e.g.
 "once accepted, mimiron should drop its CORS proxy" or similar).
@@ -291,7 +322,7 @@ Don't auto-do them — surface them and ask.
 | `401`  | Bad bearer token                                                          | Stop. Tell user `TITAN_TYR_TOKEN` is wrong.                                 |
 | `404`  | Unknown contract or proposal version                                      | Re-list proposals; the version may have been a typo, or the contract id is wrong. |
 | `409`  | Version not in `proposal` status (already accepted), or RC's stable target already exists | Re-list proposals; the state has moved since you last looked.               |
-| `422`  | Malformed version in the path (`^\d+\.\d+\.\d+(-rc\d+)?$`) or contract id not a UUID | Fix the path and retry.                                                     |
+| `422`  | Malformed version in the path (`^\d+\.\d+\.\d+(-rc\d+)?$`), contract id not a UUID, or `proposer_actor == X-Actor` without `?single_operator=true` (provider v0.16.0+) | Fix the path. For the two-party rule, have a different actor accept or pass `?single_operator=true`. |
 | `5xx`  | Server problem                                                            | Print response body verbatim. Do not retry.                                 |
 
 ## Notes
