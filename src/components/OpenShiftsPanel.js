@@ -109,6 +109,7 @@ export default {
                 <template v-if="p.proposer_actor">by {{ p.proposer_actor }}</template>
                 <template v-else><span class="shift-anon">⚠ anonymous proposer</span></template>
               </span>
+              <span v-if="p.single_operator_override" class="override-chip" title="Accepted under single-operator override (?single_operator=true) — bypassed the proposer-doesn't-accept rule. Visible by design so the bypass is auditable.">⚠ single-operator override</span>
               <span v-if="p.created_at" class="updated-chip" :title="p.created_at">{{ relativeTime(p.created_at) }}</span>
             </div>
             <div v-if="p.rationale" class="shift-rationale">{{ p.rationale }}</div>

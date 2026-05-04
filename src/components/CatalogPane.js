@@ -1,7 +1,7 @@
 import { ref, computed, watch, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import * as api from '../api.js';
-import { search, retryNonce } from '../store.js';
+import { search, retryNonce, project } from '../store.js';
 
 // Catalog: collapsible sections grouped by subtype, parts above contracts.
 // Sections appear only if they contain at least one entry — empty sections
@@ -117,9 +117,13 @@ export default {
       loading.value = true;
       error.value = null;
       try {
+        // Server-side `?project=` filter when the picker is set; null = all
+        // (no param). Re-fetches whenever the project picker changes so the
+        // filter source-of-truth is the provider, not a client-side prune.
+        const opts = project.value ? { project: project.value } : {};
         const [p, c] = await Promise.all([
-          api.fetchAll(api.listParts),
-          api.fetchAll(api.listContracts),
+          api.fetchAll(api.listParts, opts),
+          api.fetchAll(api.listContracts, opts),
         ]);
         parts.value = p;
         contracts.value = c;
@@ -132,6 +136,7 @@ export default {
 
     onMounted(load);
     watch(retryNonce, load);
+    watch(project, load);
 
     return {
       loading, error, sections, collapsed, toggle,
@@ -170,6 +175,8 @@ export default {
                 <div class="row-name">{{ p.name }}</div>
                 <div class="row-meta">
                   <span class="version-chip">v{{ p.version }}</span>
+                  <router-link v-if="p.project" :to="'/projects/' + encodeURIComponent(p.project)" class="project-chip" @click.stop :title="'project: ' + p.project">{{ p.project }}</router-link>
+                  <span v-else class="project-chip project-none" title="unprojected (no project tag)">— unprojected —</span>
                   <span v-for="a in p.aliases || []" :key="a" class="alias-chip">{{ a }}</span>
                 </div>
               </router-link>
@@ -188,6 +195,8 @@ export default {
                 </div>
                 <div class="row-meta">
                   <span class="version-chip">v{{ c.version }}</span>
+                  <router-link v-if="c.project" :to="'/projects/' + encodeURIComponent(c.project)" class="project-chip" @click.stop :title="'project: ' + c.project">{{ c.project }}</router-link>
+                  <span v-else class="project-chip project-none" title="unprojected (no project tag)">— unprojected —</span>
                 </div>
               </router-link>
             </template>

@@ -44,10 +44,17 @@ export default {
         if (props.kind === 'template') {
           const data = await api.getTemplateProposals(props.id);
           activeVersion.value = data.active_version || null;
+          // Provider v0.16.0+ adds proposer_actor / acceptor_actor /
+          // single_operator_override to each proposal. Forward them so the
+          // template history rows surface the same attribution as content
+          // proposals on contracts.
           entries.value = (data.proposals || []).map((p) => ({
             version: p.version,
             updated_at: p.proposed_at || p.updated_at || null,
             status: p.status || 'proposal',
+            proposer_actor: p.proposer_actor ?? null,
+            acceptor_actor: p.acceptor_actor ?? null,
+            single_operator_override: p.single_operator_override ?? false,
           }));
         } else {
           const fn = props.kind === 'part' ? api.listPartHistory : api.listContractHistory;
@@ -57,11 +64,16 @@ export default {
           // subtype_shift). Pre-v0.15.0 responses lack the field — default
           // to body_bump per the contract's backwards-compat clause so a
           // brief window of provider-old / consumer-new round-trips still
-          // renders correctly.
+          // renders correctly. v0.16.0+ extends each row with
+          // proposer_actor / acceptor_actor / single_operator_override
+          // (null/false on pre-v0.16.0 rows).
           entries.value = (data.results || []).map((e) => ({
             ...e,
             status: null,
             entryKind: e.kind || 'body_bump',
+            proposer_actor: e.proposer_actor ?? null,
+            acceptor_actor: e.acceptor_actor ?? null,
+            single_operator_override: e.single_operator_override ?? false,
           }));
         }
         fetched.value = true;
@@ -130,6 +142,11 @@ export default {
             <span v-if="e.status" class="proposal-chip">{{ e.status }}</span>
             <span v-else-if="i === 0 && !activeVersion && e.entryKind !== 'subtype_shift'" class="current-marker">current</span>
             <span v-if="e.updated_at" class="updated-chip" :title="e.updated_at">{{ relativeTime(e.updated_at) }}</span>
+            <span v-if="e.single_operator_override" class="override-chip" title="Accepted under single-operator override (?single_operator=true) — bypassed the proposer-doesn't-accept rule. Visible by design so the bypass is auditable.">⚠ single-operator override</span>
+            <span v-if="e.proposer_actor" class="actor-chip actor-chip-mini" :title="'X-Actor when this version was proposed'">prop {{ e.proposer_actor }}</span>
+            <span v-else-if="e.entryKind === 'body_bump' || e.status" class="actor-chip actor-chip-mini actor-anon" title="No X-Actor at propose time — two-party rule unenforceable on this entry">prop anonymous</span>
+            <span v-if="e.acceptor_actor" class="actor-chip actor-chip-mini" :title="'X-Actor at accept time'">acc {{ e.acceptor_actor }}</span>
+            <span v-else-if="(e.entryKind === 'body_bump' && !e.status) || (e.status === 'accepted')" class="actor-chip actor-chip-mini actor-anon" title="No X-Actor recorded at accept time">acc anonymous</span>
           </div>
         </div>
       </div>

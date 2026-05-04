@@ -1,8 +1,10 @@
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { search, health } from '../store.js';
+import ProjectPicker from './ProjectPicker.js';
 
 export default {
+  components: { ProjectPicker },
   setup() {
     const route = useRoute();
     const isTemplatesRoute = computed(() =>
@@ -43,6 +45,7 @@ export default {
         autocomplete="off"
         spellcheck="false"
       />
+      <project-picker v-if="!isTemplatesRoute" />
       <div class="header-meta">
         <span v-if="health.version" class="api-version">tyr {{ health.version }}</span>
         <span class="health-dot" :class="dotClass" :title="dotTitle"></span>

@@ -47,12 +47,17 @@ export const health = () => request('/health', { auth: false });
 
 // Parts (titan-tyr v0.9.0 renamed `software` → `part`; subtype discriminator
 // `software` | `container` added). Listing/detail responses include subtype.
-// Optional `?subtype=` filter narrows to a single subtype.
-export const listParts = ({ limit = 50, after = null, match = null, subtype = null } = {}) => {
+// Optional `?subtype=` filter narrows to a single subtype. Optional
+// `?project=` filter (provider v0.18.0+, #44): a project slug, or the
+// reserved sentinel `__none__` for unprojected rows. List + detail responses
+// also carry optional `project: str | null` and `created_by_actor: str | null`
+// fields (additive in v0.16.0/v0.18.0; null on rows pre-dating them).
+export const listParts = ({ limit = 50, after = null, match = null, subtype = null, project = null } = {}) => {
   const p = new URLSearchParams({ limit });
   if (after) p.set('after', after);
   if (match) p.set('match', match);
   if (subtype) p.set('subtype', subtype);
+  if (project) p.set('project', project);
   return request(`/parts?${p}`);
 };
 
@@ -61,9 +66,11 @@ export const getPart = (name) =>
 
 // Wrapper key on response is `part` (was `software` in v1.x). Results array
 // rows carry the contract's own `subtype` (`interaction` | `binding`).
-export const listPartContracts = (name, { limit = 50, after = null } = {}) => {
+// Optional `?project=` filter behaves identically to listContracts.
+export const listPartContracts = (name, { limit = 50, after = null, project = null } = {}) => {
   const p = new URLSearchParams({ limit });
   if (after) p.set('after', after);
+  if (project) p.set('project', project);
   return request(`/parts/${encodeURIComponent(name)}/contracts?${p}`);
 };
 
@@ -84,11 +91,14 @@ export const listPartSubtypeProposals = (name) =>
 // Contracts (titan-tyr v0.10.0 added subtype: `interaction` | `binding`).
 // Owner/counterparty keys on contract responses are unchanged from v1.x —
 // the field rename to `owner_part`/`counterparty_part` is only on POST input,
-// which mimiron doesn't exercise (read-only MVP).
-export const listContracts = ({ limit = 50, after = null, subtype = null } = {}) => {
+// which mimiron doesn't exercise (read-only MVP). Optional `?project=` filter
+// (provider v0.18.0+, #44): same semantics as listParts. List + detail
+// responses also carry optional `project` + `created_by_actor`.
+export const listContracts = ({ limit = 50, after = null, subtype = null, project = null } = {}) => {
   const p = new URLSearchParams({ limit });
   if (after) p.set('after', after);
   if (subtype) p.set('subtype', subtype);
+  if (project) p.set('project', project);
   return request(`/contracts?${p}`);
 };
 
@@ -124,6 +134,28 @@ export const getTemplate = (kind) =>
 
 export const getTemplateProposals = (kind) =>
   request(`/templates/${encodeURIComponent(kind)}/proposals`);
+
+// Projects (provider v0.18.0+, #44). A project is an optional tag attached
+// to parts and contracts so the UI can filter the catalog to one project at
+// a time. Membership is single-project, optional, and independent on
+// contracts (cross-project contracts allowed by design — the contract
+// carries whichever project owns the relationship). Read-only here per the
+// observability stance; create/edit/delete (no DELETE today) is driven by
+// the canonical `register-project` Claude Code skill.
+export const listProjects = ({ limit = 100, after = null } = {}) => {
+  const p = new URLSearchParams({ limit });
+  if (after) p.set('after', after);
+  return request(`/projects?${p}`);
+};
+
+export const getProject = (name) =>
+  request(`/projects/${encodeURIComponent(name)}`);
+
+// Reserved sentinel for the `?project=` filter — narrows to rows with NULL
+// `project_id`. Provider documents this as a literal string that cannot
+// collide with a real slug (slugs reject leading underscore + double
+// underscore), so the consumer uses it verbatim.
+export const PROJECT_NONE = '__none__';
 
 // Walk a paginated endpoint to completion. Used by the graph view, where we
 // genuinely need every node + edge in one bag.
