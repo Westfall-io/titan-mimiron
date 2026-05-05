@@ -1298,29 +1298,23 @@ a.project-chip:hover { background: rgba(61, 186, 122, 0.18); }
 .graph-orient-toggle:hover { color: var(--accent); border-color: var(--accent2); }
 .graph-orient-toggle:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
 
+/* Cytoscape draws on its own canvas with built-in pan/zoom, so the stage
+   is a fixed flex panel and the container fills it. No outer scrolling —
+   cy handles overflow internally. */
 .graph-stage {
   flex: 1;
   position: relative;
-  overflow: auto;
+  overflow: hidden;
   display: flex;
-  /* `safe center` keeps content centered when it fits, and aligns to start
-     (so it isn't clipped) when it overflows — needed because the SVG now
-     renders at its intrinsic size (mimiron#14) instead of scaling to fit. */
-  align-items: safe center;
-  justify-content: safe center;
+  align-items: stretch;
+  justify-content: stretch;
 }
 
 .graph-container {
-  padding: 24px;
-}
-
-.graph-container svg {
-  display: block;
-  /* No max-width / height: auto — those caused Mermaid's SVG to scale with
-     container width, which made nodes visibly move on any sibling-pane
-     layout shift. With useMaxWidth: false in the Mermaid config, the SVG
-     now has fixed intrinsic dimensions; .graph-stage scrolls if it's
-     larger than the viewport. */
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  min-height: 320px;
 }
 
 .graph-loading,
@@ -1350,152 +1344,10 @@ a.project-chip:hover { background: rgba(61, 186, 122, 0.18); }
 
 .graph-error-detail { font-size: 12px; color: var(--text); }
 
-/* nodes are clickable — make that obvious */
-.graph-container .node { cursor: pointer; transition: filter 100ms; }
-.graph-container .node:hover rect,
-.graph-container .node:hover polygon,
-.graph-container .node:hover circle {
-  filter: brightness(1.4);
-}
-
-/* Subtype-colored nodes. Wired in GraphPane.wireClicks: each node <g> gets a
-   `subtype-<kind>` class after Mermaid render. Mirrors the per-subtype chip
-   palette used in the catalog so the user's "subtype = color" mapping
-   carries across panes. !important is needed because Mermaid sets fill +
-   stroke as inline `style=` attributes, which beat plain class rules. The
-   selection highlight below also uses !important and is more specific
-   (`.node-selected` is added on top of `.subtype-…`), so it still wins. */
-.graph-container .node.subtype-software rect,
-.graph-container .node.subtype-software polygon,
-.graph-container .node.subtype-software circle {
-  fill: rgba(74, 158, 255, 0.18) !important;
-  stroke: var(--accent) !important;
-}
-.graph-container .node.subtype-image rect,
-.graph-container .node.subtype-image polygon,
-.graph-container .node.subtype-image circle {
-  fill: rgba(224, 90, 78, 0.18) !important;
-  stroke: var(--coral) !important;
-}
-.graph-container .node.subtype-container rect,
-.graph-container .node.subtype-container polygon,
-.graph-container .node.subtype-container circle {
-  fill: rgba(46, 196, 182, 0.18) !important;
-  stroke: var(--teal) !important;
-}
-.graph-container .node.subtype-pod rect,
-.graph-container .node.subtype-pod polygon,
-.graph-container .node.subtype-pod circle {
-  fill: rgba(232, 168, 58, 0.18) !important;
-  stroke: var(--amber) !important;
-}
-.graph-container .node.subtype-compose rect,
-.graph-container .node.subtype-compose polygon,
-.graph-container .node.subtype-compose circle {
-  fill: rgba(61, 186, 122, 0.18) !important;
-  stroke: var(--green) !important;
-}
-
-/* selected-node highlight (current route's part, or both endpoints of the
-   current contract). Inline styles from Mermaid require !important. The
-   selection rules need to read clearly even when overlaid on a same-color
-   subtype tint (e.g. selecting a software node, where both selection and
-   subtype were previously blue). Off-white stroke + thicker width gives
-   the outline contrast against any subtype fill; the layered drop-shadow
-   (white inner halo + blue outer glow) makes the selection unmistakable. */
-.graph-container .node.node-selected rect,
-.graph-container .node.node-selected polygon,
-.graph-container .node.node-selected circle {
-  fill: rgba(74, 158, 255, 0.45) !important;
-  stroke: var(--text) !important;
-  stroke-width: 3px !important;
-  filter:
-    drop-shadow(0 0 6px rgba(226, 228, 234, 0.65))
-    drop-shadow(0 0 14px rgba(74, 158, 255, 0.55));
-}
-
-.graph-container .node.node-selected .nodeLabel,
-.graph-container .node.node-selected text {
-  fill: var(--text) !important;
-  color: var(--text) !important;
-}
-
-/* Search-driven dimming. Non-matching nodes/edges drop to low opacity so the
-   matches stand out. Selected nodes always stay full opacity (dim is purely
-   a search filter; selection wins). */
-.graph-container .node.node-dim { opacity: 0.2; transition: opacity 120ms; }
-.graph-container .node.node-selected { opacity: 1 !important; }
-.graph-container .edgePath.edge-dim,
-.graph-container .edgeLabel.edge-dim,
-.graph-container g.edgePath.edge-dim,
-.graph-container g.edgeLabel.edge-dim { opacity: 0.15; transition: opacity 120ms; }
-
-/* Click-driven focus filter. Hides everything outside the focused subgraph
-   so the user can walk the graph one hop at a time. display:none (not just
-   visibility:hidden) — visibility leaves the element in the hit-test layer
-   AND in some Mermaid setups doesn't cascade through to SVG marker-end
-   arrowheads, so paths kept rendering their arrows even when "hidden".
-   display:none removes the element from rendering and hit-testing entirely.
-   Mermaid doesn't auto-relayout, so removing nodes from the SVG doesn't
-   ripple — the SVG keeps its original viewBox and remaining edges keep
-   their pre-computed paths. */
-.graph-container .node-hidden,
-.graph-container .edge-hidden {
-  display: none !important;
-}
-
-/* Edges — clickable post-render. Path hit areas are thin; label is the
-   easier target. Both are wired to navigate to /contracts/:id. */
-.graph-container .edge-clickable { cursor: pointer; }
-.graph-container .edge-clickable path {
-  pointer-events: stroke;
-  transition: stroke 100ms;
-}
-.graph-container .edge-clickable:hover path { stroke: var(--accent) !important; }
-
-/* Edge labels — Mermaid 11 wraps label text in
-   `<span class="edgeLabel"><p>text</p></span>`. The `<p>` (block) inside the
-   `<span>` (inline) is invalid HTML; browsers handle it by "breaking" the
-   inline around the block, which inflates the span's bounding box well past
-   the foreignObject's measured height — SVG then clips the label and it
-   looks blank (mimiron#12). With `theme: 'dark'` Mermaid injects its own
-   styles that work around this; with `theme: 'base'` (which we switched to
-   in 0.3.0) it doesn't.
-   Force the `<p>` to render inline so the span sizes to its actual content.
-   margin/padding reset is also necessary — default <p> margins are 1em. */
-.graph-container .edgeLabel p,
-.graph-container .nodeLabel p {
-  display: inline !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  line-height: inherit !important;
-}
-
-.graph-container .edgeLabel,
-.graph-container .edgeLabel foreignObject > div,
-.graph-container .edgeLabel span,
-.graph-container .edgeLabel p {
-  color: var(--text2) !important;
-  background-color: var(--bg2) !important;
-}
-
-.graph-container .edge-label-clickable { cursor: pointer; }
-/* No padding/margin here — Mermaid sizes the foreignObject to bare text
-   width (its measurement DOM lives outside .graph-container, so our CSS
-   doesn't apply during measurement). Anything that adds to the rendered
-   content's dimensions causes the text to overflow and SVG to clip it. */
-.graph-container .edge-label-clickable foreignObject > div,
-.graph-container .edge-label-clickable .edgeLabel {
-  border-radius: 2px;
-  transition: color 100ms, background 100ms;
-}
-.graph-container .edge-label-clickable:hover foreignObject > div,
-.graph-container .edge-label-clickable:hover .edgeLabel,
-.graph-container .edge-label-clickable:hover .edgeLabel span,
-.graph-container .edge-label-clickable:hover .edgeLabel p {
-  color: var(--accent) !important;
-  background-color: var(--bg3) !important;
-}
+/* Cytoscape draws nodes + edges on its own canvas, so per-element styling
+   (subtype tint, selected outline, focus hide, search dim) lives in the
+   cytoscape stylesheet inside GraphPane.js, not here. Only the surrounding
+   chrome (status messages, container size, legend) stays in CSS. */
 
 .graph-legend {
   flex-shrink: 0;
