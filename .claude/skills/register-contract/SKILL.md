@@ -73,7 +73,7 @@ If the user says "contract" without qualifying, default to `interaction`
 (today's existing behaviour) and confirm.
 
 If the user picked `connection`, also pick the **connection_type** —
-one of six labels:
+one of seven labels:
 
 | `connection_type` | Owner part subtype  | Counterparty part subtype | What it records                                     |
 | ----------------- | ------------------- | ------------------------- | --------------------------------------------------- |
@@ -83,9 +83,10 @@ one of six labels:
 | `member-of`       | `container`         | `compose`                 | Container is a service entry in a compose stack     |
 | `depends-on`      | `container`         | `container`               | Startup ordering within a compose stack              |
 | `submodule`       | `software`          | `software`                | One repository includes another via `.gitmodules`   |
+| `serves-static`   | `software`          | `software`                | Owner serves counterparty's compiled / static artifacts at runtime (e.g. nginx serving an SPA bundle). Distinct from `submodule` (source-tree composition) and `depends-on` (container startup ordering). v0.25.0+ (#62). |
 
-All six labels work end-to-end after #37. The router still has a
-deferred-subtype guard for any future rule that references a
+All seven labels work end-to-end after #37 + #62. The router still
+has a deferred-subtype guard for any future rule that references a
 not-yet-implemented Part subtype, but no current rule trips it.
 
 The subtype determines which template you fetch in step 7 and shapes
@@ -211,7 +212,11 @@ need.
 > `connection_type` label) without bumping the version or mutating the
 > body, and runs through a separate two-party propose/accept handshake
 > via `/accept-contract-proposal`. Surface this as the path forward
-> rather than asking the user to tear the contract down out-of-band.
+> rather than asking the user to delete-and-re-register (which is now
+> possible via `/propose-contract-deletion` (v0.26.0+, #69), but
+> in-place subtype shift is the more legible audit trail when the
+> intent is "this contract should still exist, just classified
+> differently").
 
 If `results` is empty, continue.
 
@@ -403,8 +408,8 @@ ask, or default to unprojected.
   the unique constraint is `(owner_part_id, counterparty_part_id, subtype,
   connection_type) NULLS NOT DISTINCT` — so a single directed pair can
   hold one `interaction`, one `binding`, and one `connection` per
-  `connection_type` (six labels, so up to six connection rows + one
-  interaction + one binding = eight rows max in one direction). This is
+  `connection_type` (seven labels, so up to seven connection rows + one
+  interaction + one binding = nine rows max in one direction). This is
   what enables the multi-row Connections tables in `container@3.0.0`
   and the templates that depend on it. Just because you *can* register
   multiple subtypes on the same pair doesn't mean you *should* — most
@@ -414,9 +419,18 @@ ask, or default to unprojected.
   row and a `binding` row (the runs is the structural fact, the binding
   is the address); software `payments-service` → software `orders-service`
   is a single `interaction`.
-- **Subtype is structural.** It can't be changed after registration
-  (no PUT path mutates it). If you really need a different subtype,
-  the contract has to be re-created — out-of-band today.
+- **Subtype is structural.** It can't be changed via PUT. The
+  in-place fix is `/propose-contract-subtype-shift`; if the contract
+  must be wholly re-created, soft-delete via
+  `/propose-contract-deletion` (v0.26.0+, #69) and POST `/contracts`
+  fresh — the uniqueness key is partial-on-live so the same
+  endpoints+subtype can be re-registered after delete.
+- **To remove a contract, see `/propose-contract-deletion`** (#69).
+  Deletion is a two-party soft-delete via the same propose/accept
+  pattern as the other shifts; the row stays in the database for
+  audit (visible via `?include_deleted=true`) and the same
+  `(owner, counterparty, subtype, connection_type)` can be
+  re-registered fresh afterwards.
 - **Initial creation is active by design.** This is the only
   contract-mutation endpoint where the result is `active` without an
   acceptance step. The propose/accept flow only exists for subsequent
