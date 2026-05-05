@@ -2,9 +2,9 @@
 
 The WatcherVault Web UI — a **read-only** browser into the WatcherVault catalog of parts and contracts. titan-mimiron is intentionally read-only by design (see [DESIGN-MVP.md](./DESIGN-MVP.md) → "Scope: read-only, by design"); part registration and contract proposals happen via the API directly or via the `register-software` Claude skill in this repo.
 
-> **Status:** 0.18.2 — Software view now shows **all** contracts between software parts, not just `interaction` ones. The filter switched from contract-subtype-driven (only `interaction` edges kept) to parts-driven (all software parts kept; every contract whose endpoints are both software parts kept). This is what made the new `(titan-mimiron-server → titan-mimiron-spa, connection, serves-static)` edge — and any future intra-software `connection_type` — visible in the Software view. DevOps view's edge-driven filter is unchanged so the deployment-chain cross-stage edges still render.
+> **Status:** 0.19.0 — graph renderer swapped from Mermaid to **Cytoscape.js + dagre**. The Mermaid build couldn't enforce strict tier ordering (no `rank=same` primitive in v11), so cross-tier edges visually scrambled the lifecycle reading. The new renderer drives dagre directly with an anchor-chain rank-pinning trick (one zero-size dummy per tier, chained `minlen: 1`, with each real node sandwiched between its tier's anchor and the next), forcing the canonical compose ↔ container ↔ image ↔ software flow regardless of edge direction. Also gains: built-in pan/zoom, per-element styling that no longer fights SVG `foreignObject` clipping, and click handlers wired through Cytoscape's event API instead of post-render DOM walks. Same view tabs, orientation toggle, focus filter, search dimming, and project filter as before.
 >
-> Builds on 0.18.1 (titan-mimiron split + skill sync) and 0.18.0 (project picker + X-Actor visibility).
+> Builds on 0.18.2 (Software view shows all intra-software contracts), 0.18.1 (titan-mimiron split + skill sync), 0.18.0 (project picker + X-Actor visibility).
 
 ---
 
@@ -87,7 +87,7 @@ Markdown links inside contract/part bodies are intercepted: a slug-shaped href (
 | --- | --- |
 | Framework | [Vue 3](https://vuejs.org/) + [Vue Router 4](https://router.vuejs.org/) via CDN ([resolved #1](https://github.com/Westfall-io/titan-mimiron/issues/1)) |
 | Markdown rendering | [marked.js](https://marked.js.org/) 12 + [DOMPurify](https://github.com/cure53/DOMPurify) 3 (sanitize before `v-html`) |
-| Graph rendering | [Mermaid](https://mermaid.js.org/) 11 (`graph LR`, dark theme) |
+| Graph rendering | [Cytoscape.js](https://js.cytoscape.org/) 3 + [dagre](https://github.com/dagrejs/dagre) 0.8 layout (anchor-chain rank pinning for canonical lifecycle tiers) |
 | Typography | IBM Plex Sans / IBM Plex Mono (Google Fonts) |
 | Module resolution | Native `<script type="importmap">` — no bundler |
 | Build step | None |

@@ -1,78 +1,54 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
-import mermaid from 'mermaid';
+import cytoscape from 'cytoscape';
+import dagre from 'dagre';
 import * as api from '../api.js';
 import { retryNonce, search, project } from '../store.js';
 
-// Mermaid IDs must be alphanumeric/underscore. Part names are slug-shaped
-// — replace hyphens with underscores and prefix to guarantee an alpha leading char.
-const slug = (name) => 'p_' + name.replace(/-/g, '_');
-
-// Per-contract-subtype edge encoding. Color stays unified (purple, set in CSS)
-// so part-subtype node colors remain the dominant visual; subtype is encoded
-// on the edge by line style + a label glyph instead. interaction is the
-// no-style default (most common, request/response); binding renders thicker
-// (structural composition); connection renders dashed (runtime link).
-const EDGE_SUBTYPE = {
-  interaction: { glyph: '▷', linkStyle: null },
-  binding:     { glyph: '▣', linkStyle: 'stroke-width:3px' },
-  connection:  { glyph: '┄', linkStyle: 'stroke-dasharray:6 4' },
+// Lifecycle tier ranks: compose at the top of a TB layout (or left in LR),
+// then container/pod, then image, then software at the bottom/right. Edges
+// in the catalog flow inconsistently across these tiers (software→image
+// builds-from, image→container instantiates, container→software runs,
+// container→compose member-of), so the natural dagre ranking by edge
+// direction produces visually scrambled tiers. Pinning the rank per node
+// forces the canonical lifecycle reading order in both LR and TB.
+const TIER = {
+  compose: 0,
+  pod: 1,
+  container: 1,
+  image: 2,
+  software: 3,
 };
 
-function buildSource(parts, contracts, orientation) {
-  const dir = orientation === 'TB' ? 'TB' : 'LR';
-  const lines = [`graph ${dir}`];
-  for (const p of parts) {
-    lines.push(`  ${slug(p.name)}["${p.name}"]`);
-  }
-  contracts.forEach((c) => {
-    const enc = EDGE_SUBTYPE[c.subtype];
-    const label = enc ? `${enc.glyph} v${c.version}` : `v${c.version}`;
-    lines.push(`  ${slug(c.owner)} -->|"${label}"| ${slug(c.counterparty)}`);
-  });
-  // linkStyle uses the edge's source-order index — same index we wire clicks
-  // by, so it stays in sync with contractList. Skip subtypes whose linkStyle
-  // is null to leave them at the theme default.
-  contracts.forEach((c, i) => {
-    const enc = EDGE_SUBTYPE[c.subtype];
-    if (enc?.linkStyle) lines.push(`  linkStyle ${i} ${enc.linkStyle}`);
-  });
-  return lines.join('\n');
-}
+// Same id mangling carried from the Mermaid era so the route → graph-node
+// mapping stays consistent. Cytoscape doesn't actually need the prefix — any
+// string is a valid id — but keeping it lets the focus / selection wiring
+// translate without renaming anything in the route layer.
+const slug = (name) => 'p_' + name.replace(/-/g, '_');
 
-// View tabs. The original DESIGN.md spec called for four (Full / Software /
-// DevOps / Interfaces); we collapsed Interfaces into a use-case the graph
-// focus filter (#29) already covers (click an edge → see only that contract
-// + endpoints). The remaining three split by lifecycle stage: All sees
-// everything, Software is the application architecture (software parts and
-// every contract between them — including connection_types like
-// `serves-static`), DevOps is the deployment chain (build/runtime part
-// subtypes + binding/connection contracts).
+// Per-part-subtype color: matches the catalog chip palette so the same part
+// reads the same in both panes. Cytoscape canvas styling can't pull from
+// CSS variables, so the values are duplicated here.
+const SUBTYPE_COLOR = {
+  software:  '#5b8def',
+  container: '#e08a3d',
+  image:     '#a07ce5',
+  pod:       '#3dc18a',
+  compose:   '#d65a8e',
+};
+
 const VIEWS = [
   { id: 'all', label: 'All' },
   { id: 'software', label: 'Software' },
   { id: 'devops', label: 'DevOps' },
 ];
 
-// Two filter modes:
-//   parts-driven — keep parts whose subtype is in `parts`; keep contracts
-//     whose BOTH endpoints are kept. Use this when the view is "show me
-//     this stage of the architecture and every relationship inside it",
-//     regardless of contract subtype. Software is parts-driven so a
-//     software→software `serves-static` connection (or any future
-//     intra-software connection_type) shows up alongside interactions.
-//   edge-driven — keep contracts whose subtype is in `contracts`; then
-//     keep any part whose subtype is in `parts` OR is an endpoint of a
-//     kept contract. Use this when the view is "show me this kind of
-//     edge and whatever it touches" — DevOps wants the deployment chain
-//     to stay connected, so a binding (container → software) keeps the
-//     software node visible even though "software" isn't in DevOps's
-//     part set.
+// Software is parts-driven (every contract between software parts shows up,
+// regardless of subtype/connection_type); DevOps is edge-driven (binding +
+// connection contracts pull in their endpoints so cross-stage edges still
+// render). Same logic as the previous Mermaid build.
 const VIEW_FILTERS = {
-  software: {
-    mode: 'parts',
-    parts: new Set(['software']),
-  },
+  software: { mode: 'parts', parts: new Set(['software']) },
   devops: {
     mode: 'edge',
     parts: new Set(['container', 'image', 'pod', 'compose']),
@@ -90,7 +66,6 @@ function filterForView(view, allParts, allContracts) {
     const contracts = allContracts.filter((c) => kept.has(c.owner) && kept.has(c.counterparty));
     return { parts, contracts };
   }
-  // edge-driven
   const contracts = allContracts.filter((c) => f.contracts.has(c.subtype));
   const endpoints = new Set();
   for (const c of contracts) {
@@ -127,6 +102,183 @@ function saveOrientation(v) {
   try { localStorage.setItem(ORIENT_LS_KEY, v); } catch { /* storage disabled */ }
 }
 
+// Drive dagre directly so we can pin per-node tier ranks. dagre v0.8's
+// `rank` field on a node doesn't actually constrain ranking (it's the
+// algorithm's *output*, not its input); the canonical way to constrain
+// ranks is the Sugiyama "anchor chain" trick:
+//
+//   1. Add one zero-size anchor node per tier (compose → … → software),
+//      chained anchor[t] → anchor[t+1] with minlen=1 and high weight.
+//      This forces dagre to allocate ranks 0..N for the tiers in order.
+//   2. Sandwich each real node between its tier's anchor and the next:
+//      anchor[T] → node (minlen=0) and node → anchor[T+1] (minlen=1),
+//      both with high weight. The first says "rank ≥ T", the second
+//      "rank ≤ T", so the node lands exactly on rank T.
+//   3. Real edges go in with low weight + minlen=0 — they only influence
+//      within-tier ordering (cross-minimization), not tier assignment.
+//
+// dagre's cycle-removal step honors edge weight, so the heavy pin edges
+// keep their direction and any conflicting real edge gets reversed for
+// layout (we don't care about the layout-side direction; cytoscape draws
+// the edge from the real owner → counterparty regardless).
+function computeDagrePositions(parts, contracts, orientation) {
+  const g = new dagre.graphlib.Graph();
+  // Use BT/RL under the hood so tier 0 (compose) lands at the *far* end of
+  // the canvas (bottom in TB-toggle, right in LR-toggle) and software
+  // (tier 3) sits where the user starts reading. The toggle button label
+  // (TB/LR) reflects the conceptual orientation; the physical flip stays
+  // an implementation detail of dagre's anchor-chain direction.
+  g.setGraph({
+    rankdir: orientation === 'TB' ? 'BT' : 'RL',
+    nodesep: 60,
+    ranksep: 110,
+    edgesep: 20,
+    ranker: 'network-simplex',
+  });
+  g.setDefaultEdgeLabel(() => ({}));
+
+  // Anchor chain — one dummy node per tier, plus a sentinel beyond the
+  // last so every real node has an "upper bound" anchor to point at.
+  const NUM_TIERS = 4;
+  const anchors = [];
+  for (let i = 0; i <= NUM_TIERS; i++) {
+    const id = `__anchor_${i}__`;
+    anchors.push(id);
+    g.setNode(id, { width: 0.0001, height: 0.0001 });
+  }
+  for (let i = 0; i < anchors.length - 1; i++) {
+    g.setEdge(anchors[i], anchors[i + 1], { minlen: 1, weight: 1000 });
+  }
+
+  for (const p of parts) {
+    const id = slug(p.name);
+    g.setNode(id, { width: 160, height: 44 });
+    const tier = TIER[p.subtype];
+    if (tier !== undefined) {
+      g.setEdge(anchors[tier], id, { minlen: 0, weight: 1000 });
+      g.setEdge(id, anchors[tier + 1], { minlen: 1, weight: 1000 });
+    }
+  }
+
+  for (const c of contracts) {
+    g.setEdge(slug(c.owner), slug(c.counterparty), { minlen: 0, weight: 1 });
+  }
+
+  dagre.layout(g);
+
+  // Drop the anchor positions; only real nodes go back to cytoscape.
+  const positions = {};
+  for (const p of parts) {
+    const id = slug(p.name);
+    const n = g.node(id);
+    if (n) positions[id] = { x: n.x, y: n.y };
+  }
+  return positions;
+}
+
+function buildElements(parts, contracts, positions) {
+  const elements = [];
+  for (const p of parts) {
+    const node = {
+      group: 'nodes',
+      data: { id: slug(p.name), label: p.name, name: p.name, subtype: p.subtype },
+      classes: 'subtype-' + p.subtype,
+    };
+    const pos = positions && positions[slug(p.name)];
+    if (pos) node.position = pos;
+    elements.push(node);
+  }
+  contracts.forEach((c, i) => {
+    // Edge label carries the contract subtype + connection_type when present.
+    // Cytoscape's text-rotation 'autorotate' keeps it readable on diagonal edges.
+    const ctype = c.connection_type ? `${c.subtype}/${c.connection_type}` : c.subtype;
+    const classes = ['edge-' + c.subtype];
+    if (c.connection_type) classes.push('ct-' + c.connection_type);
+    elements.push({
+      group: 'edges',
+      data: {
+        id: 'e_' + c.contract_id,
+        source: slug(c.owner),
+        target: slug(c.counterparty),
+        label: `${ctype} v${c.version}`,
+        subtype: c.subtype,
+        connectionType: c.connection_type || '',
+        contractId: c.contract_id,
+        index: i,
+      },
+      classes: classes.join(' '),
+    });
+  });
+  return elements;
+}
+
+// Cytoscape stylesheet. Selectors compose, so e.g. `edge.edge-binding` extends
+// the base `edge` rules with thicker width. Selection / focus / dimming each
+// have a class flipped on/off via the apply* helpers below.
+const CY_STYLE = [
+  // Nodes — base
+  { selector: 'node', style: {
+    'background-color': '#1e2026',
+    'border-color': '#363a44',
+    'border-width': 1,
+    'shape': 'round-rectangle',
+    'label': 'data(label)',
+    'color': '#e2e4ea',
+    'text-valign': 'center',
+    'text-halign': 'center',
+    'font-family': 'IBM Plex Mono, ui-monospace, monospace',
+    'font-size': 11,
+    'padding': '14px',
+    'width': 'label',
+    'height': 'label',
+    'text-wrap': 'wrap',
+  }},
+  // Per-subtype border tint (the catalog chip palette).
+  { selector: 'node.subtype-software', style: { 'border-color': SUBTYPE_COLOR.software, 'border-width': 2 }},
+  { selector: 'node.subtype-container', style: { 'border-color': SUBTYPE_COLOR.container, 'border-width': 2 }},
+  { selector: 'node.subtype-image', style: { 'border-color': SUBTYPE_COLOR.image, 'border-width': 2 }},
+  { selector: 'node.subtype-pod', style: { 'border-color': SUBTYPE_COLOR.pod, 'border-width': 2 }},
+  { selector: 'node.subtype-compose', style: { 'border-color': SUBTYPE_COLOR.compose, 'border-width': 2 }},
+  // Selection (route says "you're on this part") — gold outline. !important via
+  // higher specificity, since selected wins over focus / dim / subtype tint.
+  { selector: 'node.selected', style: {
+    'border-color': '#f0b400',
+    'border-width': 3,
+  }},
+  { selector: 'node.dim', style: { 'opacity': 0.25 }},
+  { selector: 'node.hidden', style: { 'display': 'none' }},
+
+  // Edges — base
+  { selector: 'edge', style: {
+    'curve-style': 'bezier',
+    'target-arrow-shape': 'triangle',
+    'arrow-scale': 0.8,
+    'line-color': '#555b6a',
+    'target-arrow-color': '#555b6a',
+    'width': 1.4,
+    'label': 'data(label)',
+    'color': '#9aa0ac',
+    'font-family': 'IBM Plex Mono, ui-monospace, monospace',
+    'font-size': 9,
+    'text-rotation': 'autorotate',
+    'text-margin-y': -8,
+    // Solid background pill behind each edge label so it stays readable
+    // when an edge crosses other edges or nodes.
+    'text-background-color': '#0e0f11',
+    'text-background-opacity': 1,
+    'text-background-padding': 2,
+  }},
+  { selector: 'edge.edge-binding', style: { 'width': 2.6 }},
+  { selector: 'edge.edge-connection', style: { 'line-style': 'dashed' }},
+  { selector: 'edge.selected', style: {
+    'line-color': '#f0b400',
+    'target-arrow-color': '#f0b400',
+    'width': 3,
+  }},
+  { selector: 'edge.dim', style: { 'opacity': 0.2 }},
+  { selector: 'edge.hidden', style: { 'display': 'none' }},
+];
+
 export default {
   setup() {
     const router = useRouter();
@@ -136,25 +288,19 @@ export default {
     const counts = ref({ parts: 0, contracts: 0, bySubtype: { interaction: 0, binding: 0, connection: 0 } });
     const containerRef = ref(null);
     // Focus = click-driven view filter. null = full graph; otherwise we hide
-    // every node/edge that isn't part of the focused subgraph. Set on graph
-    // click, cleared by the legend link, ESC, or empty-background click.
-    // The route watcher below keeps focus following the route — landing on a
-    // node outside the current subgraph re-focuses around the new node so the
-    // walk-the-graph use-case keeps working even after a catalog/header nav.
+    // every node/edge that isn't part of the focused subgraph. Same shape as
+    // the Mermaid build so the route watcher logic translates 1:1.
     const focus = ref(null);   // null | { kind: 'node'|'edge', id: string }
-    const view = ref(loadView());   // 'all' | 'software' | 'devops'
-    const orientation = ref(loadOrientation());   // 'LR' | 'TB'
-    let nodeMap = {};
-    // partList/contractList hold the *currently rendered* (filtered) sets —
-    // search dimming, focus subgraph computation, and edge-click wiring all
-    // index into them. allParts/allContracts cache the full fetch so
-    // tab switches don't re-hit the API.
+    const view = ref(loadView());
+    const orientation = ref(loadOrientation());
+
+    let cy = null;
+    // partList / contractList hold the *currently rendered* (filtered) sets.
+    // search dimming + focus subgraph computation index into them.
     let partList = [];
     let contractList = [];
     let allParts = [];
     let allContracts = [];
-    let edgePathEls = [];
-    let edgeLabelEls = [];
 
     // For contract routes we need owner+counterparty; fetch the contract
     // to learn them, then highlight both endpoints.
@@ -183,37 +329,47 @@ export default {
     });
 
     function applySelection() {
+      if (!cy) return;
       const set = new Set(selected.value);
-      for (const [s, el] of Object.entries(nodeMap)) {
-        el.classList.toggle('node-selected', set.has(s));
-      }
+      cy.batch(() => {
+        cy.nodes().forEach((n) => n.toggleClass('selected', set.has(n.id())));
+        // For contract routes, also outline the matching edge.
+        if (route.name === 'contract' && route.params.id) {
+          cy.edges().forEach((e) =>
+            e.toggleClass('selected', e.data('contractId') === route.params.id)
+          );
+        } else {
+          cy.edges().removeClass('selected');
+        }
+      });
     }
     watch(selected, applySelection);
 
     // Compute the subgraph that should remain visible for the current focus.
-    // Node focus: the node itself + every node one hop away + every edge that
-    // touches it. Edge focus: just the two endpoints + that single edge.
+    // Same shape as the Mermaid build; we substitute cy element ids for the
+    // DOM-class side effects. Node focus pulls every neighbour edge + its
+    // far endpoint; edge focus pulls just the two endpoints + the edge.
     function computeSubgraph(f) {
       if (!f) return null;
       const visibleNodes = new Set();
-      const visibleContracts = new Set();   // by contractList index
+      const visibleContracts = new Set();   // by contract_id
       if (f.kind === 'node') {
         visibleNodes.add(f.id);
-        contractList.forEach((c, i) => {
+        contractList.forEach((c) => {
           const o = slug(c.owner);
           const cp = slug(c.counterparty);
           if (o === f.id || cp === f.id) {
             visibleNodes.add(o);
             visibleNodes.add(cp);
-            visibleContracts.add(i);
+            visibleContracts.add(c.contract_id);
           }
         });
       } else if (f.kind === 'edge') {
-        contractList.forEach((c, i) => {
+        contractList.forEach((c) => {
           if (c.contract_id === f.id) {
             visibleNodes.add(slug(c.owner));
             visibleNodes.add(slug(c.counterparty));
-            visibleContracts.add(i);
+            visibleContracts.add(c.contract_id);
           }
         });
       }
@@ -221,22 +377,18 @@ export default {
     }
 
     function applyFocus() {
+      if (!cy) return;
       const sub = computeSubgraph(focus.value);
-      if (!sub) {
-        for (const el of Object.values(nodeMap)) el.classList.remove('node-hidden');
-        for (const el of edgePathEls) el?.classList.remove('edge-hidden');
-        for (const el of edgeLabelEls) el?.classList.remove('edge-hidden');
-        return;
-      }
-      for (const [s, el] of Object.entries(nodeMap)) {
-        el.classList.toggle('node-hidden', !sub.visibleNodes.has(s));
-      }
-      edgePathEls.forEach((el, i) =>
-        el?.classList.toggle('edge-hidden', !sub.visibleContracts.has(i))
-      );
-      edgeLabelEls.forEach((el, i) =>
-        el?.classList.toggle('edge-hidden', !sub.visibleContracts.has(i))
-      );
+      cy.batch(() => {
+        if (!sub) {
+          cy.elements().removeClass('hidden');
+          return;
+        }
+        cy.nodes().forEach((n) => n.toggleClass('hidden', !sub.visibleNodes.has(n.id())));
+        cy.edges().forEach((e) =>
+          e.toggleClass('hidden', !sub.visibleContracts.has(e.data('contractId')))
+        );
+      });
     }
     watch(focus, applyFocus);
 
@@ -245,9 +397,7 @@ export default {
     // tick is a no-op on those (the new route's entity is the focus center).
     // The watcher matters for navigations that DIDN'T originate in the
     // graph — catalog row, header search, browser back, contract row in
-    // PartDetail, etc. While focus is active, those navs re-focus the graph
-    // around the new entity so the walk-the-graph mental model holds. With
-    // no focus active, the watcher is inert.
+    // PartDetail, etc.
     watch(
       () => [route.name, route.params.name, route.params.id],
       ([name, partName, contractId]) => {
@@ -262,123 +412,44 @@ export default {
       }
     );
 
-    // Clear-focus is a full reset: drop the focus filter AND deselect the
-    // current route. The user reads "clear focus" as "show me everything
-    // again" — leaving the markdown body + .node-selected highlight up
-    // would be a half-clear. Route push to '/' fires the route watcher,
-    // which clears focus.value (idempotent — we already nulled it here),
-    // and updates `selected` (computed from route) so applySelection
-    // removes the highlight.
     function clearFocus() {
       focus.value = null;
       if (route.name !== 'home') router.push('/');
     }
 
-    // ESC clears focus (when focus is active). Window-level so it works
-    // regardless of where focus is in the page — the graph filter is a
-    // viewport mode, not a focused-input.
     function onKeydown(e) {
       if (e.key === 'Escape' && focus.value) clearFocus();
     }
     onMounted(() => window.addEventListener('keydown', onKeydown));
-    onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown));
-
-    // Click on the graph background (anywhere that isn't a node or edge)
-    // clears focus. Node/edge handlers stopPropagation to keep their click
-    // from also triggering this clear.
-    function onContainerClick(e) {
-      if (!focus.value) return;
-      if (e.target.closest('.node, .edgePath, g.edgePath, .edgeLabel, g.edgeLabel')) return;
-      clearFocus();
-    }
+    onBeforeUnmount(() => {
+      window.removeEventListener('keydown', onKeydown);
+      if (cy) { cy.destroy(); cy = null; }
+    });
 
     // Search-dimming: nodes whose name/aliases don't substring-match the
     // current search drop to low opacity; edges where neither endpoint
-    // matches dim too. Mirrors the catalog's `?match=` rule (substring,
-    // case-insensitive, name + aliases).
+    // matches dim too. Same rule as the catalog's `?match=`.
     function applyDimming() {
+      if (!cy) return;
       const q = (search.value || '').trim().toLowerCase();
-      if (!q) {
-        for (const el of Object.values(nodeMap)) el.classList.remove('node-dim');
-        for (const el of edgePathEls) el?.classList.remove('edge-dim');
-        for (const el of edgeLabelEls) el?.classList.remove('edge-dim');
-        return;
-      }
-      const matchingSlugs = new Set();
-      for (const p of partList) {
-        const hay = [p.name, ...(p.aliases || [])].map((s) => s.toLowerCase());
-        if (hay.some((h) => h.includes(q))) matchingSlugs.add(slug(p.name));
-      }
-      for (const [s, el] of Object.entries(nodeMap)) {
-        el.classList.toggle('node-dim', !matchingSlugs.has(s));
-      }
-      contractList.forEach((c, i) => {
-        const dim =
-          !matchingSlugs.has(slug(c.owner)) &&
-          !matchingSlugs.has(slug(c.counterparty));
-        edgePathEls[i]?.classList.toggle('edge-dim', dim);
-        edgeLabelEls[i]?.classList.toggle('edge-dim', dim);
+      cy.batch(() => {
+        if (!q) {
+          cy.elements().removeClass('dim');
+          return;
+        }
+        const matchingSlugs = new Set();
+        for (const p of partList) {
+          const hay = [p.name, ...(p.aliases || [])].map((s) => s.toLowerCase());
+          if (hay.some((h) => h.includes(q))) matchingSlugs.add(slug(p.name));
+        }
+        cy.nodes().forEach((n) => n.toggleClass('dim', !matchingSlugs.has(n.id())));
+        cy.edges().forEach((e) => {
+          const dim = !matchingSlugs.has(e.source().id()) && !matchingSlugs.has(e.target().id());
+          e.toggleClass('dim', dim);
+        });
       });
     }
     watch(search, applyDimming);
-
-    // Wire post-render click handlers for nodes and edges. We don't use
-    // Mermaid's `click ID call fn()` DSL because it relies on a global window
-    // function and is fragile across Mermaid versions; direct DOM listeners
-    // also let us make edges clickable (Mermaid has no edge-click DSL).
-    function wireClicks(parts, contracts) {
-      const root = containerRef.value;
-      if (!root) return;
-
-      // Nodes — match Mermaid's flowchart node id pattern: `flowchart-<slug>-<n>`.
-      // Build slug→element map for both selection and click wiring.
-      nodeMap = {};
-      for (const el of root.querySelectorAll('.node')) {
-        const m = el.id.match(/-(p_[a-z0-9_]+)-\d+$/);
-        if (!m) continue;
-        const part = parts.find((p) => slug(p.name) === m[1]);
-        if (!part) continue;
-        nodeMap[m[1]] = el;
-        // Subtype class — drives the per-subtype fill/stroke palette in
-        // CSS so each node reads at a glance. Same chip color the catalog
-        // uses; selection highlight (.node-selected, !important) still wins.
-        if (part.subtype) el.classList.add('subtype-' + part.subtype);
-        el.style.cursor = 'pointer';
-        el.addEventListener('click', (e) => {
-          e.stopPropagation();
-          focus.value = { kind: 'node', id: slug(part.name) };
-          router.push(`/parts/${encodeURIComponent(part.name)}`);
-        });
-      }
-
-      // Edges — Mermaid renders edges in source order, with each edge as a
-      // direct child of `.edgePaths` (the path) and `.edgeLabels` (the label
-      // group). The path's class set varies across Mermaid versions
-      // (`.flowchart-link`, `.edge-thickness-normal`, `LS-…`/`LE-…`) and
-      // notably does NOT include `.edgePath` in 11.x — so we match by parent
-      // (`.edgePaths > *`) instead, which is stable across versions. Labels
-      // similarly are direct children of `.edgeLabels`. We iterate in
-      // source-order index and bind both to the corresponding contract id.
-      edgePathEls = Array.from(root.querySelectorAll('.edgePaths > *'));
-      edgeLabelEls = Array.from(root.querySelectorAll('.edgeLabels > *'));
-      contracts.forEach((c, i) => {
-        const handler = (e) => {
-          e.stopPropagation();
-          focus.value = { kind: 'edge', id: c.contract_id };
-          router.push(`/contracts/${encodeURIComponent(c.contract_id)}`);
-        };
-        const ep = edgePathEls[i];
-        if (ep) {
-          ep.classList.add('edge-clickable');
-          ep.addEventListener('click', handler);
-        }
-        const el = edgeLabelEls[i];
-        if (el) {
-          el.classList.add('edge-label-clickable');
-          el.addEventListener('click', handler);
-        }
-      });
-    }
 
     async function render() {
       status.value = 'loading';
@@ -386,9 +457,7 @@ export default {
       try {
         if (allParts.length === 0) {
           // Server-side `?project=` filter mirrors the catalog pane so both
-          // surfaces show the same scoped subset. The graph caches once per
-          // project value; the project watcher below clears the cache so
-          // a filter flip refetches.
+          // surfaces show the same scoped subset.
           const opts = project.value ? { project: project.value } : {};
           const [p, c] = await Promise.all([
             api.fetchAll(api.listParts, opts),
@@ -408,55 +477,53 @@ export default {
           return;
         }
         if (parts.length === 0) {
-          // Catalog has data but the view filtered everything out.
           status.value = 'empty-view';
           return;
         }
 
-        mermaid.initialize({
-          startOnLoad: false,
-          theme: 'base',
-          themeVariables: {
-            background: '#0e0f11',
-            primaryColor: '#1e2026',
-            primaryTextColor: '#e2e4ea',
-            primaryBorderColor: '#363a44',
-            secondaryColor: '#16181c',
-            tertiaryColor: '#16181c',
-            lineColor: '#555b6a',
-            edgeLabelBackground: '#16181c',
-            fontFamily: 'IBM Plex Mono, ui-monospace, monospace',
-            fontSize: '11px',
-          },
-          // We bind clicks ourselves post-render — no need for 'loose'.
-          securityLevel: 'strict',
-          flowchart: {
-            // useMaxWidth: false renders the SVG at its intrinsic dimensions
-            // and lets the surrounding .graph-stage scroll if it overflows.
-            // useMaxWidth: true caused the entire graph to re-scale (nodes
-            // visibly moving) on any container width change — even subtle
-            // ones from sibling-pane layout shifts (mimiron#14).
-            useMaxWidth: false,
-            htmlLabels: true,
-            padding: 20,
-            nodeSpacing: 50,
-            rankSpacing: 80,
-            curve: 'basis',
-          },
-        });
-
-        const source = buildSource(parts, contracts, orientation.value);
-        const { svg } = await mermaid.render('mimiron-graph', source);
-        containerRef.value.innerHTML = svg;
-
         partList = parts;
         contractList = contracts;
-        wireClicks(parts, contracts);
+
+        // Show the container BEFORE creating cy, otherwise the v-show:none
+        // means cytoscape sees a 0×0 box and the layout never settles.
+        status.value = 'ready';
+        // Wait one tick for v-show=true to apply.
+        await new Promise((r) => requestAnimationFrame(r));
+
+        if (cy) { cy.destroy(); cy = null; }
+        // Compute positions via dagre with per-node rank constraints, then
+        // hand cytoscape a preset layout so the canonical tier order is
+        // honored regardless of edge direction.
+        const positions = computeDagrePositions(parts, contracts, orientation.value);
+        cy = cytoscape({
+          container: containerRef.value,
+          elements: buildElements(parts, contracts, positions),
+          style: CY_STYLE,
+          layout: { name: 'preset', fit: true, padding: 30 },
+          wheelSensitivity: 0.2,
+          autoungrabify: true,
+          minZoom: 0.3,
+          maxZoom: 2.5,
+        });
+
+        cy.on('tap', 'node', (e) => {
+          const node = e.target;
+          focus.value = { kind: 'node', id: node.id() };
+          router.push(`/parts/${encodeURIComponent(node.data('name'))}`);
+        });
+        cy.on('tap', 'edge', (e) => {
+          const edge = e.target;
+          focus.value = { kind: 'edge', id: edge.data('contractId') };
+          router.push(`/contracts/${encodeURIComponent(edge.data('contractId'))}`);
+        });
+        cy.on('tap', (e) => {
+          // Tap on the canvas background (target === cy) clears focus.
+          if (e.target === cy && focus.value) clearFocus();
+        });
+
         applySelection();
         applyDimming();
         applyFocus();
-
-        status.value = 'ready';
       } catch (e) {
         error.value = e;
         status.value = 'error';
@@ -464,21 +531,13 @@ export default {
     }
 
     onMounted(render);
-    // retryNonce is a hard reset — invalidate the cache and refetch.
     watch(retryNonce, () => { allParts = []; allContracts = []; render(); });
-    // Project filter flip: same hard-reset semantics — the cached set is
-    // scoped to the prior project value, so we drop it and refetch.
     watch(project, () => { allParts = []; allContracts = []; focus.value = null; render(); });
-    // View change re-renders with the filtered subset. Focus might point at a
-    // node/edge that no longer exists in the new view, so clear it first;
-    // re-render then runs from a clean focus state.
     watch(view, () => {
       saveView(view.value);
       focus.value = null;
       render();
     });
-    // Orientation flip — re-render with the new direction; preserve focus
-    // (focus targets a node/edge id, which is stable across orientations).
     watch(orientation, () => {
       saveOrientation(orientation.value);
       render();
@@ -490,7 +549,7 @@ export default {
     }
 
     return {
-      status, error, counts, containerRef, focus, clearFocus, onContainerClick,
+      status, error, counts, containerRef, focus, clearFocus,
       view, views: VIEWS, setView, orientation, toggleOrientation,
     };
   },
@@ -527,7 +586,6 @@ export default {
           ref="containerRef"
           v-show="status === 'ready'"
           class="graph-container"
-          @click="onContainerClick"
         ></div>
       </div>
       <div class="graph-legend">
