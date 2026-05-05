@@ -2,9 +2,9 @@
 
 The WatcherVault Web UI — a **read-only** browser into the WatcherVault catalog of parts and contracts. titan-mimiron is intentionally read-only by design (see [DESIGN-MVP.md](./DESIGN-MVP.md) → "Scope: read-only, by design"); part registration and contract proposals happen via the API directly or via the `register-software` Claude skill in this repo.
 
-> **Status:** 0.18.1 — catalog hygiene + skill sync, no UI changes. Closes mimiron#47 by splitting the conflated `titan-mimiron` software part into `titan-mimiron-server` (the nginx + reverse-proxy hop) and `titan-mimiron-spa` (the JavaScript bundle the browser actually consumes the API from), using titan-tyr v0.21.0's new name-shift + endpoint-shift propose/accept flows. The consumer-facing interaction contract `94def627` was retargeted in place to `titan-mimiron-spa`; a parallel proxy-hop interaction contract pins `(titan-tyr → titan-mimiron-server)`; the image part picks up a second `builds-from` edge from the spa. Synced 23 skills from titan-tyr v0.21.0 (4 new shift skills + `update-contract`).
+> **Status:** 0.18.2 — Software view now shows **all** contracts between software parts, not just `interaction` ones. The filter switched from contract-subtype-driven (only `interaction` edges kept) to parts-driven (all software parts kept; every contract whose endpoints are both software parts kept). This is what made the new `(titan-mimiron-server → titan-mimiron-spa, connection, serves-static)` edge — and any future intra-software `connection_type` — visible in the Software view. DevOps view's edge-driven filter is unchanged so the deployment-chain cross-stage edges still render.
 >
-> Builds on 0.18.0 (project picker + X-Actor visibility).
+> Builds on 0.18.1 (titan-mimiron split + skill sync) and 0.18.0 (project picker + X-Actor visibility).
 
 ---
 
