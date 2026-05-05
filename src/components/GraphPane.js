@@ -44,33 +44,53 @@ function buildSource(parts, contracts, orientation) {
 // DevOps / Interfaces); we collapsed Interfaces into a use-case the graph
 // focus filter (#29) already covers (click an edge → see only that contract
 // + endpoints). The remaining three split by lifecycle stage: All sees
-// everything, Software is the application architecture (software parts +
-// interaction contracts), DevOps is the deployment chain (build/runtime
-// part subtypes + binding/connection contracts).
+// everything, Software is the application architecture (software parts and
+// every contract between them — including connection_types like
+// `serves-static`), DevOps is the deployment chain (build/runtime part
+// subtypes + binding/connection contracts).
 const VIEWS = [
   { id: 'all', label: 'All' },
   { id: 'software', label: 'Software' },
   { id: 'devops', label: 'DevOps' },
 ];
 
+// Two filter modes:
+//   parts-driven — keep parts whose subtype is in `parts`; keep contracts
+//     whose BOTH endpoints are kept. Use this when the view is "show me
+//     this stage of the architecture and every relationship inside it",
+//     regardless of contract subtype. Software is parts-driven so a
+//     software→software `serves-static` connection (or any future
+//     intra-software connection_type) shows up alongside interactions.
+//   edge-driven — keep contracts whose subtype is in `contracts`; then
+//     keep any part whose subtype is in `parts` OR is an endpoint of a
+//     kept contract. Use this when the view is "show me this kind of
+//     edge and whatever it touches" — DevOps wants the deployment chain
+//     to stay connected, so a binding (container → software) keeps the
+//     software node visible even though "software" isn't in DevOps's
+//     part set.
 const VIEW_FILTERS = {
-  software: { parts: new Set(['software']), contracts: new Set(['interaction']) },
+  software: {
+    mode: 'parts',
+    parts: new Set(['software']),
+  },
   devops: {
+    mode: 'edge',
     parts: new Set(['container', 'image', 'pod', 'compose']),
     contracts: new Set(['binding', 'connection']),
   },
 };
 
-// Filter the catalog for the current view. Edge-driven: keep contracts whose
-// subtype is in the view's contract set, then keep any part whose subtype is
-// in the view's part set OR is an endpoint of a kept contract. The endpoint
-// rule lets cross-stage edges render — e.g., a binding (container → software)
-// shows the software node even though "software" isn't in the DevOps part
-// set, so the deployment chain stays connected.
 function filterForView(view, allParts, allContracts) {
   if (view === 'all') return { parts: allParts, contracts: allContracts };
   const f = VIEW_FILTERS[view];
   if (!f) return { parts: allParts, contracts: allContracts };
+  if (f.mode === 'parts') {
+    const parts = allParts.filter((p) => f.parts.has(p.subtype));
+    const kept = new Set(parts.map((p) => p.name));
+    const contracts = allContracts.filter((c) => kept.has(c.owner) && kept.has(c.counterparty));
+    return { parts, contracts };
+  }
+  // edge-driven
   const contracts = allContracts.filter((c) => f.contracts.has(c.subtype));
   const endpoints = new Set();
   for (const c of contracts) {
