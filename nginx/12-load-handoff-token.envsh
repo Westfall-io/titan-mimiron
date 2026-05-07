@@ -1,0 +1,31 @@
+# Load TYR_TOKEN from a K8s init-container handoff file, if present.
+#
+# Context (titan-archaedas#7 / titan-mimiron#58): in K8s deployments using
+# the per-pod init-container token pattern, an init container mints a
+# fresh per-caller bearer at startup and writes it to a shared emptyDir
+# volume at /handoff/TITAN_TYR_TOKEN. We can't deliver that token via
+# `envFrom: secretKeyRef` because Secret-derived env is materialized at
+# pod-create time — *before* init containers run, so a freshly-issued
+# token isn't visible to the main container's env.
+#
+# This shim bridges the file-based handoff into the env-based config
+# pipeline. It runs before 15-envsubst-config-json.sh (numeric prefix 12
+# < 15) so the existing shim picks up the populated TYR_TOKEN env var
+# and substitutes it into /usr/share/nginx/html/config.json as today.
+#
+# The `.envsh` extension is load-bearing: nginx:alpine's docker-entrypoint
+# *sources* `.envsh` files into the parent shell so their exports
+# propagate to sibling scripts, while it *executes* `.sh` files in a
+# subprocess (no propagation). Without `.envsh` this shim would set
+# TYR_TOKEN in its own subshell only, and the original env (from `-e`
+# or `envFrom:`) would still win in the next script.
+#
+# Backward compat: in compose/dev where /handoff doesn't exist, this
+# shim is a no-op and TYR_TOKEN falls through from the Dockerfile ENV
+# default (or whatever the caller passed via -e / environment:).
+
+HANDOFF=/handoff/TITAN_TYR_TOKEN
+if [ -f "$HANDOFF" ]; then
+  TYR_TOKEN="$(tr -d '[:space:]' < "$HANDOFF")"
+  export TYR_TOKEN
+fi
