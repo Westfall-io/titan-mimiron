@@ -2,9 +2,9 @@
 
 The WatcherVault Web UI — a **read-only** browser into the WatcherVault catalog of parts and contracts. titan-mimiron is intentionally read-only by design (see [DESIGN-MVP.md](./DESIGN-MVP.md) → "Scope: read-only, by design"); part registration and contract proposals happen via the API directly or via the `register-software` Claude skill in this repo.
 
-> **Status:** 0.20.0 — image now supports the K8s init-container token handoff path needed for the per-pod auth flow tracked in [titan-archaedas#7](https://github.com/Westfall-io/titan-archaedas/issues/7) (closes [#58](https://github.com/Westfall-io/titan-mimiron/issues/58)). A new entrypoint shim `nginx/12-load-handoff-token.sh` reads `/handoff/TITAN_TYR_TOKEN` (if present) into the `TYR_TOKEN` env var before the existing 15-envsubst shim runs, so the existing config.json substitution chain is unchanged — this is purely a new *source* for the token. Backward-compatible with compose/dev (no handoff dir → shim no-ops → env default takes over). Required because `envFrom: secretKeyRef` materializes at pod-create time, *before* init containers run, so a fresh per-pod token can't reach the main container's env via Secret patching alone.
+> **Status:** 0.20.1 — adds Cache-Control headers to nginx so a future deployment misconfig can't leave browsers wedged on heuristically-cached bad responses (closes [#60](https://github.com/Westfall-io/titan-mimiron/issues/60), surfaced by [titan-archaedas#8](https://github.com/Westfall-io/titan-archaedas/issues/8)). `/tyr/*` now sends `Cache-Control: no-store` (API responses never cached); `/config.json` also `no-store` (carries the bearer token); SPA bundle (`/`) sends `no-cache` so the next deploy lands on every browser's next reload via cheap conditional GETs. No SPA, init-container, or chart changes — just nginx response headers.
 >
-> Builds on 0.19.0 (Cytoscape.js + dagre graph renderer), 0.18.2 (Software view shows all intra-software contracts), 0.18.1 (titan-mimiron split + skill sync), 0.18.0 (project picker + X-Actor visibility).
+> Builds on 0.20.0 (init-container handoff shim), 0.19.0 (Cytoscape.js + dagre graph renderer), 0.18.2 (Software view shows all intra-software contracts), 0.18.1 (titan-mimiron split + skill sync), 0.18.0 (project picker + X-Actor visibility).
 
 ---
 
