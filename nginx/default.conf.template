@@ -4,13 +4,32 @@ server {
     root /usr/share/nginx/html;
     index index.html;
 
+    # SPA bundle. `no-cache` forces a conditional GET on every load so the
+    # next deploy lands immediately — the existing etag / last-modified
+    # validators turn most reloads into cheap 304s, but a changed bundle
+    # busts the cache without manual clearing. `always` so the header
+    # ships on 304s too.
     location / {
         try_files $uri $uri/ /index.html;
+        add_header Cache-Control "no-cache" always;
+    }
+
+    # /config.json carries the bearer token. `no-store` prevents storage
+    # by intermediate caches; src/api.js already passes `cache: 'no-store'`
+    # client-side, this is the server-side counterpart.
+    location = /config.json {
+        add_header Cache-Control "no-store" always;
     }
 
     # Production analog of dev-server.py — proxy /tyr/* to titan-tyr so the
     # browser only ever talks to its own origin. Becomes optional once
     # titan-tyr#14 (CORS) ships, but is harmless to keep.
+    #
+    # `no-store` on API responses prevents the entire class of stuck-cache
+    # incidents where a misconfigured proxy returns the wrong shape (e.g.
+    # the SPA's index.html on a self-loop) and gets heuristically cached
+    # for hours after the deployment is fixed. See titan-mimiron#60 /
+    # titan-archaedas#8.
     location /tyr/ {
         proxy_pass ${TYR_UPSTREAM}/;
         proxy_http_version 1.1;
@@ -18,5 +37,6 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        add_header Cache-Control "no-store" always;
     }
 }
