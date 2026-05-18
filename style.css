@@ -547,10 +547,37 @@ a.project-chip:hover { background: rgba(61, 186, 122, 0.18); }
 .subtype-chip.subtype-container   { background: rgba(46, 196, 182, 0.10); color: var(--teal);   border-color: rgba(46, 196, 182, 0.4); }
 .subtype-chip.subtype-pod         { background: rgba(232, 168, 58, 0.10); color: var(--amber);  border-color: rgba(232, 168, 58, 0.4); }
 .subtype-chip.subtype-compose     { background: rgba(61, 186, 122, 0.10); color: var(--green);  border-color: rgba(61, 186, 122, 0.4); }
+/* K8s runtime palette (M-A / archaedas#9). Colors duplicated from GraphPane.js
+   SUBTYPE_COLOR so the catalog chip and the graph node border read as the
+   same hue for each subtype. Inline rather than promoted to CSS vars because
+   the variable namespace is already small and these aren't reused elsewhere. */
+.subtype-chip.subtype-deployment  { background: rgba(78, 205, 196, 0.10); color: #4ecdc4; border-color: rgba(78, 205, 196, 0.4); }
+.subtype-chip.subtype-statefulset { background: rgba(38, 166, 154, 0.10); color: #26a69a; border-color: rgba(38, 166, 154, 0.4); }
+.subtype-chip.subtype-job         { background: rgba(255, 209, 102, 0.10); color: #ffd166; border-color: rgba(255, 209, 102, 0.4); }
+.subtype-chip.subtype-service     { background: rgba(17, 138, 178, 0.10); color: #118ab2; border-color: rgba(17, 138, 178, 0.4); }
+.subtype-chip.subtype-ingress     { background: rgba(6, 214, 160, 0.10);  color: #06d6a0; border-color: rgba(6, 214, 160, 0.4); }
+.subtype-chip.subtype-secret      { background: rgba(239, 71, 111, 0.10); color: #ef476f; border-color: rgba(239, 71, 111, 0.4); }
+.subtype-chip.subtype-configmap   { background: rgba(155, 142, 181, 0.10); color: #9b8eb5; border-color: rgba(155, 142, 181, 0.4); }
 /* All contract subtypes share purple — text label conveys which kind. */
 .subtype-chip.subtype-interaction,
 .subtype-chip.subtype-binding,
 .subtype-chip.subtype-connection  { background: rgba(155, 114, 232, 0.10); color: var(--purple); border-color: rgba(155, 114, 232, 0.4); }
+
+/* Sensitive-data banner on PartDetail for subtype=secret (M-D / archaedas#9).
+   Top-level visual reminder that the template encodes a "key names only,
+   never values" convention. Muted red — distinguishes from chip topbar
+   without reusing the .error-banner style (this is a guideline reminder,
+   not an error state). */
+.sensitive-banner {
+  margin: 12px 0;
+  padding: 8px 12px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: #ef476f;
+  background: rgba(239, 71, 111, 0.08);
+  border: 1px solid rgba(239, 71, 111, 0.4);
+  border-radius: 3px;
+}
 
 /* Sub-discriminator chip for connection contracts. Renders the
    connection_type label (one of: builds-from, instantiates, runs, member-of,
