@@ -85,6 +85,9 @@ export default {
             </span>
           </div>
         </div>
+        <div v-if="part.subtype === 'secret'" class="sensitive-banner" role="note">
+          🔒 sensitive — key names only; values live in the cluster, never in the catalog.
+        </div>
         <div class="detail-body markdown-body" v-html="renderedBody"></div>
         <div class="detail-section">
           <h2 class="section-title">

@@ -120,14 +120,34 @@ export const listContractSubtypeProposals = (id) =>
 // returns `{kind, active_version, proposals: []}` — there is no per-version
 // history endpoint; "history" surfaces in mimiron as active_version + the
 // pending RC proposals. Order here groups by lifecycle stage: source
-// (software), runtime (container/pod/compose with image as the artifact in
-// between), then contract subtypes.
-export const TEMPLATE_KINDS = ['software', 'image', 'container', 'pod', 'compose', 'interaction', 'binding', 'connection'];
+// (software), build/runtime (container/pod/compose with image as the
+// artifact in between), K8s runtime (ingress/service/deployment/etc., per
+// archaedas#9 — top-down through the request path), then contract subtypes.
+export const TEMPLATE_KINDS = [
+  // Source
+  'software',
+  // Build / compose runtime
+  'image', 'container', 'pod', 'compose',
+  // K8s runtime (M-C / archaedas#9) — ordered top-down through the request
+  // path: ingress receives → routes-to → service selects → deployment runs.
+  'ingress', 'service',
+  'deployment', 'statefulset', 'job',
+  'secret', 'configmap',
+  // Contract subtypes (last — these describe edges, not parts)
+  'interaction', 'binding', 'connection',
+];
 
 // Part subtypes — anything in `GET /parts?subtype=`. Distinct from contract
 // subtypes (interaction/binding/connection). Used by UsageSection to decide
-// whether a template kind walks parts or contracts.
-export const PART_SUBTYPES = ['software', 'container', 'image', 'pod', 'compose'];
+// whether a template kind walks parts or contracts. Mirrors TEMPLATE_KINDS
+// minus the three contract subtypes.
+export const PART_SUBTYPES = [
+  'software',
+  'image', 'container', 'pod', 'compose',
+  'ingress', 'service',
+  'deployment', 'statefulset', 'job',
+  'secret', 'configmap',
+];
 
 export const getTemplate = (kind) =>
   request(`/templates/${encodeURIComponent(kind)}`, { accept: 'text/markdown' });

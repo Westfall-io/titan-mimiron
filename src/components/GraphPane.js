@@ -5,14 +5,26 @@ import dagre from 'dagre';
 import * as api from '../api.js';
 import { retryNonce, search, project } from '../store.js';
 
-// Lifecycle tier ranks: compose at the top of a TB layout (or left in LR),
-// then container/pod, then image, then software at the bottom/right. Edges
-// in the catalog flow inconsistently across these tiers (software→image
-// builds-from, image→container instantiates, container→software runs,
-// container→compose member-of), so the natural dagre ranking by edge
+// Lifecycle tier ranks: K8s runtime objects at the top of a TB layout (or
+// left in LR), then compose / build tier, then image, then software at the
+// bottom/right. Edges in the catalog flow inconsistently across these tiers
+// (software→image builds-from, image→container instantiates, container→
+// software runs, container→compose member-of, service→deployment selects,
+// ingress→service routes-to), so the natural dagre ranking by edge
 // direction produces visually scrambled tiers. Pinning the rank per node
 // forces the canonical lifecycle reading order in both LR and TB.
+//
+// Negative-extension scheme (per archaedas#9 lock-in): K8s subtypes occupy
+// negative tiers so the existing compose/build/image/software positions
+// don't shift in the graph users already read.
 const TIER = {
+  // K8s runtime (M-A / archaedas#9)
+  ingress:     -2,
+  service:     -1,
+  deployment:   0,
+  statefulset:  0,
+  job:          0,
+  // Existing compose/build/image/software (unchanged)
   compose: 0,
   pod: 1,
   container: 1,
@@ -30,28 +42,49 @@ const slug = (name) => 'p_' + name.replace(/-/g, '_');
 // reads the same in both panes. Cytoscape canvas styling can't pull from
 // CSS variables, so the values are duplicated here.
 const SUBTYPE_COLOR = {
-  software:  '#5b8def',
-  container: '#e08a3d',
-  image:     '#a07ce5',
-  pod:       '#3dc18a',
-  compose:   '#d65a8e',
+  // Existing (build/compose tier)
+  software:    '#5b8def',
+  container:   '#e08a3d',
+  image:       '#a07ce5',
+  pod:         '#3dc18a',
+  compose:     '#d65a8e',
+  // K8s runtime (M-A / archaedas#9)
+  deployment:  '#4ecdc4',  // teal
+  statefulset: '#26a69a',  // deep teal (close cousin to deployment)
+  job:         '#ffd166',  // amber
+  service:     '#118ab2',  // mid-blue
+  ingress:     '#06d6a0',  // mint
+  secret:      '#ef476f',  // red — signals "handle with care"
+  configmap:   '#9b8eb5',  // muted lavender
 };
 
+// Tab ids are stable (used as localStorage keys); labels can shift without
+// resetting user state. The 'devops' id was kept after the 'DevOps' →
+// 'Runtime' rename in M-B (archaedas#9) so existing localStorage values
+// keep resolving.
 const VIEWS = [
   { id: 'all', label: 'All' },
   { id: 'software', label: 'Software' },
-  { id: 'devops', label: 'DevOps' },
+  { id: 'devops', label: 'Runtime' },
 ];
 
 // Software is parts-driven (every contract between software parts shows up,
-// regardless of subtype/connection_type); DevOps is edge-driven (binding +
+// regardless of subtype/connection_type); Runtime is edge-driven (binding +
 // connection contracts pull in their endpoints so cross-stage edges still
-// render). Same logic as the previous Mermaid build.
+// render). The Runtime view unions compose and K8s subtypes since
+// WatcherVault is the coexistence case — one project, two runtime layers.
 const VIEW_FILTERS = {
   software: { mode: 'parts', parts: new Set(['software']) },
   devops: {
     mode: 'edge',
-    parts: new Set(['container', 'image', 'pod', 'compose']),
+    parts: new Set([
+      // Compose / build (existing)
+      'container', 'image', 'pod', 'compose',
+      // K8s runtime (M-B / archaedas#9)
+      'deployment', 'statefulset', 'job',
+      'service', 'ingress',
+      'secret', 'configmap',
+    ]),
     contracts: new Set(['binding', 'connection']),
   },
 };
@@ -239,6 +272,13 @@ const CY_STYLE = [
   { selector: 'node.subtype-image', style: { 'border-color': SUBTYPE_COLOR.image, 'border-width': 2 }},
   { selector: 'node.subtype-pod', style: { 'border-color': SUBTYPE_COLOR.pod, 'border-width': 2 }},
   { selector: 'node.subtype-compose', style: { 'border-color': SUBTYPE_COLOR.compose, 'border-width': 2 }},
+  { selector: 'node.subtype-deployment', style: { 'border-color': SUBTYPE_COLOR.deployment, 'border-width': 2 }},
+  { selector: 'node.subtype-statefulset', style: { 'border-color': SUBTYPE_COLOR.statefulset, 'border-width': 2 }},
+  { selector: 'node.subtype-job', style: { 'border-color': SUBTYPE_COLOR.job, 'border-width': 2 }},
+  { selector: 'node.subtype-service', style: { 'border-color': SUBTYPE_COLOR.service, 'border-width': 2 }},
+  { selector: 'node.subtype-ingress', style: { 'border-color': SUBTYPE_COLOR.ingress, 'border-width': 2 }},
+  { selector: 'node.subtype-secret', style: { 'border-color': SUBTYPE_COLOR.secret, 'border-width': 2 }},
+  { selector: 'node.subtype-configmap', style: { 'border-color': SUBTYPE_COLOR.configmap, 'border-width': 2 }},
   // Selection (route says "you're on this part") — gold outline. !important via
   // higher specificity, since selected wins over focus / dim / subtype tint.
   { selector: 'node.selected', style: {
